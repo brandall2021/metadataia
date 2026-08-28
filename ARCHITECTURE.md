@@ -1,0 +1,114 @@
+# METADATAIA — Arquitectura
+
+## Principio arquitectónico fundamental (spec §4)
+
+Separación estricta de responsabilidades. La IA **nunca** escribe directamente en DSpace.
+
+```
+PDF
+ -> Analyzer
+ -> OCR si corresponde
+ -> Text Extraction
+ -> AI Extraction
+ -> Metadata Normalizer
+ -> Metadata Validator
+ -> Human Review (SNRD Validator)
+ -> DSpace Connector
+```
+
+## Componentes
+
+```
+Frontend (Next.js)
+    |
+    v
+FastAPI
+    |
+    +------------------+
+    |                  |
+    v                  v
+PostgreSQL           Redis
+                       |
+                       v
+                    Celery
+                       |
+             +---------+----------+
+             |         |          |
+             v         v          v
+            OCR       IA      Validation
+             |
+             v
+          Storage (MinIO S3)
+             |
+             v
+       DSpace Connector
+             |
+             v
+          DSpace 9
+```
+
+## Backend (`backend/app/`)
+
+Paquetes por dominio, espejando la spec §5:
+
+| Paquete | Responsabilidad (fase) |
+|---------|-------------------------|
+| `core/` | Configuración (pydantic-settings), sesión SQLAlchemy |
+| `auth/` | Login, JWT, RBAC (F3) |
+| `users/` | Usuarios, roles, permisos (F3) |
+| `documents/` | Ciclo de vida de documentos (F7+) |
+| `pdf/` | Motor PDF: validación, SHA256, análisis (F7) |
+| `ocr/` | OCRmyPDF + Tesseract (F8) |
+| `extraction/` | Extracción de texto página por página (F8) |
+| `ai/` | Proveedores, modelos, agentes, prompts (F4-5, F9) |
+| `metadata/` | Esquemas, campos, vocabularios, normalización (F6, F10) |
+| `validation/` | Reglas de validación, errores y warnings (F11) |
+| `snrd/` | Validación de interoperabilidad SNRD (F11) |
+| `dspace/` | Conector DSpace 9 (F13) |
+| `workflows/` | Máquina de estados del documento (F7+) |
+| `audit/` | Logs de auditoría (F14) |
+| `repositories/` | Registro de repositorios y colecciones (F13) |
+| `administration/` | CRUDs del panel de administración (F4-6, F13) |
+| `jobs/` | Tareas Celery asíncronas (F7+) |
+| `models/` | Modelos ORM de todas las tablas (F2) |
+
+## Abstracciones (spec §44)
+
+Interfaces que permiten cambiar tecnologías sin reescribir la aplicación:
+
+```
+AIProvider.generate_structured_output()
+RepositoryConnector.create_item() / upload_file() / add_metadata() / submit()
+OCRProvider
+MetadataNormalizer
+MetadataValidator
+```
+
+## Base de datos
+
+25 tablas (spec §6). Ver `backend/alembic/` y `backend/app/models/`.
+Migraciones con Alembic; la BD inicial se crea con:
+
+```bash
+make migrate
+```
+
+## Procesamiento asíncrono
+
+Celery + Redis. Tareas definidas (placeholders en `app/jobs/tasks.py`):
+`analyze_document`, `run_ocr`, `extract_text`, `extract_metadata`,
+`normalize_metadata`, `validate_metadata`, `deposit_dspace`.
+
+## Estado del documento (spec §24)
+
+`UPLOADED → ANALYZING → OCR_PROCESSING → TEXT_EXTRACTED → AI_PROCESSING →
+METADATA_EXTRACTED → NORMALIZING → VALIDATING → NEEDS_REVIEW → APPROVED →
+DEPOSITING → DEPOSITED` (con `REJECTED` y `ERROR`).
+
+## Decisiones técnicas registradas
+
+- SQLAlchemy 2.0 síncrono + Pydantic v2 (los workers Celery comparten el mismo código).
+- Postgres en Docker requiere `seccomp:unconfined` en hosts con kernel 3.10 (CentOS 7).
+- El firewall del hosting bloquea tráfico a rangos privados; ver `scripts/patch-firewall.sh`.
+- Los FKs circulares (`ai_agents ↔ document_types`, `ai_agents → ai_agent_versions`)
+  se crean diferidos (`use_alter`) en la migración inicial.
