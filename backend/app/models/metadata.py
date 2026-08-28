@@ -18,7 +18,9 @@ class MetadataSchema(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
 
-    fields: Mapped[list["MetadataField"]] = relationship(back_populates="schema")
+    fields: Mapped[list["MetadataField"]] = relationship(
+        back_populates="schema", cascade="all, delete-orphan", passive_deletes=True
+    )
 
 
 class MetadataField(Base):
@@ -47,7 +49,7 @@ class MetadataField(Base):
     schema: Mapped[MetadataSchema] = relationship(back_populates="fields")
     vocabulary: Mapped["Vocabulary | None"] = relationship(back_populates="fields")
     document_type_links: Mapped[list["DocumentTypeMetadataField"]] = relationship(
-        back_populates="metadata_field"
+        back_populates="metadata_field", cascade="all, delete-orphan", passive_deletes=True
     )
     metadata_records: Mapped[list["MetadataRecord"]] = relationship(back_populates="metadata_field")
 
@@ -75,7 +77,10 @@ class DocumentType(Base):
     )
 
     metadata_field_links: Mapped[list["DocumentTypeMetadataField"]] = relationship(
-        back_populates="document_type"
+        back_populates="document_type", cascade="all, delete-orphan", passive_deletes=True
+    )
+    default_agent: Mapped["AIAgent | None"] = relationship(
+        foreign_keys=[default_agent_id]
     )
     repository_collections: Mapped[list["RepositoryCollection"]] = relationship(
         back_populates="document_type"
@@ -110,7 +115,9 @@ class Vocabulary(Base):
     source: Mapped[str | None] = mapped_column(String(200))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    values: Mapped[list["VocabularyValue"]] = relationship(back_populates="vocabulary")
+    values: Mapped[list["VocabularyValue"]] = relationship(
+        back_populates="vocabulary", cascade="all, delete-orphan", passive_deletes=True
+    )
     fields: Mapped[list[MetadataField]] = relationship(back_populates="vocabulary")
 
 

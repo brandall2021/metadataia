@@ -61,6 +61,7 @@ Paquetes por dominio, espejando la spec §5:
 | `ocr/` | OCRmyPDF + Tesseract (F8) |
 | `extraction/` | Extracción de texto página por página (F8) |
 | `ai/` | Proveedores y modelos + prueba de conexión (F4 ✅); agentes, prompts con variables, versiones (F5 ✅); extracción estructurada (F9) |
+| `metadata/` | Esquemas, campos, vocabularios (+CSV, sinónimos, normalización) y tipos documentales (F6 ✅; F10 normalizador, F11 reglas) |
 | `metadata/` | Esquemas, campos, vocabularios, normalización (F6, F10) |
 | `validation/` | Reglas de validación, errores y warnings (F11) |
 | `snrd/` | Validación de interoperabilidad SNRD (F11) |
@@ -117,6 +118,15 @@ DEPOSITING → DEPOSITED` (con `REJECTED` y `ERROR`).
   se crean diferidos (`use_alter`) en la migración inicial.
 - `AIAgent.versions` se elimina con `cascade="all, delete-orphan" + passive_deletes`
   (la FK `agent_id` es NOT NULL; sin esto el ORM intentaría anularla al borrar el agente).
+- Las relaciones uno-a-muchos de `metadata.py` con FK NOT NULL usan
+  `cascade="all, delete-orphan" + passive_deletes` (esquema→campos,
+  campo⇄tipo documental, vocabulario→valores) y el CASCADE lo resuelve la BD.
+- Sinónimos de vocabulario se guardan con su grafía original; la normalización
+  (minúsculas + sin acentos) se aplica al matchear (`normalize`, usado por el
+  normalizador F10). El botón frontend se construye dinámicamente desde
+  `/api/admin/metadata/fields` (FASE 6).
+- El frontend Next.js se compila solo en su contenedor (node:20-alpine):
+  las bindings nativas de Next requieren glibc ≥ 2.27 y el host es CentOS 7.
 - API Keys de proveedores se cifran en reposo (Fernet derivado de `APP_SECRET_KEY`)
   y solo se exponen enmascaradas (`****last4`).
 - JWT stateless: `logout` descarta el token en el cliente; revocación real (blacklist) en FASE 17.

@@ -40,9 +40,15 @@ export default function Home() {
               <CardDescription>{item.description}</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button variant="outline" disabled>
-                En construcción
-              </Button>
+              {item.title === "Administración" ? (
+                <a href="/admin">
+                  <Button variant="outline">Abrir</Button>
+                </a>
+              ) : (
+                <Button variant="outline" disabled>
+                  En construcción
+                </Button>
+              )}
             </CardContent>
           </Card>
         ))}

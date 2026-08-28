@@ -17,7 +17,15 @@ Fases del plan (spec §41):
 | 3 | Autenticación (login, JWT, RBAC, usuarios, roles, permisos) | ✅ |
 | 4 | Administración IA (proveedores, modelos, prueba de conexión) | ✅ |
 | 5 | Agentes IA (CRUD, prompts variables, versiones, clonar, probar) | ✅ |
-| 6–18 | Metadatos, PDF, OCR, revisión, DSpace, auditoría, tests, seguridad, producción | Pendiente (incremental) |
+| 6 | Metadatos (esquemas, campos, vocabularios, tipos documentales) | ✅ |
+
+## Frontend de administración (FASE 6+)
+
+Módulo `/admin` con login (FASE 3). Los formularios se construyen
+dinámicamente desde la configuración de metadatos: un campo nuevo creado en
+`Metadatos` aparece automáticamente, sin tocar el código frontend.
+| 6 | Metadatos (esquemas, campos, vocabularios, tipos documentales) | ✅ |
+| 7–18 | Alertas, motor PDF, OCR, metadatos, revisión, DSpace, auditoría, tests, seguridad, producción | Pendiente (incremental) |
 
 ## Requisitos
 
