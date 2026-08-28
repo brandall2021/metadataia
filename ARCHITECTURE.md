@@ -53,14 +53,14 @@ Paquetes por dominio, espejando la spec §5:
 
 | Paquete | Responsabilidad (fase) |
 |---------|-------------------------|
-| `core/` | Configuración (pydantic-settings), sesión SQLAlchemy |
-| `auth/` | Login, JWT, RBAC (F3) |
-| `users/` | Usuarios, roles, permisos (F3) |
+| `core/` | Configuración (pydantic-settings), sesión SQLAlchemy, seguridad (bcrypt/JWT/Fernet) y dependencias RBAC (F3) |
+| `auth/` | Login, refresh, logout, /me (F3) ✅ |
+| `users/` | Usuarios, roles, permisos (F3) ✅ |
 | `documents/` | Ciclo de vida de documentos (F7+) |
 | `pdf/` | Motor PDF: validación, SHA256, análisis (F7) |
 | `ocr/` | OCRmyPDF + Tesseract (F8) |
 | `extraction/` | Extracción de texto página por página (F8) |
-| `ai/` | Proveedores, modelos, agentes, prompts (F4-5, F9) |
+| `ai/` | Proveedores y modelos + prueba de conexión (F4 ✅); agentes y prompts (F5, F9) |
 | `metadata/` | Esquemas, campos, vocabularios, normalización (F6, F10) |
 | `validation/` | Reglas de validación, errores y warnings (F11) |
 | `snrd/` | Validación de interoperabilidad SNRD (F11) |
@@ -108,7 +108,14 @@ DEPOSITING → DEPOSITED` (con `REJECTED` y `ERROR`).
 ## Decisiones técnicas registradas
 
 - SQLAlchemy 2.0 síncrono + Pydantic v2 (los workers Celery comparten el mismo código).
+- Imagen de desarrollo instala el paquete en modo **editable** (`pip install -e ".[dev]"`):
+  el código montado por volumen siempre gana sobre la copia en site-packages
+  (evita imports obsoletos en pytest).
 - Postgres en Docker requiere `seccomp:unconfined` en hosts con kernel 3.10 (CentOS 7).
 - El firewall del hosting bloquea tráfico a rangos privados; ver `scripts/patch-firewall.sh`.
 - Los FKs circulares (`ai_agents ↔ document_types`, `ai_agents → ai_agent_versions`)
   se crean diferidos (`use_alter`) en la migración inicial.
+- API Keys de proveedores se cifran en reposo (Fernet derivado de `APP_SECRET_KEY`)
+  y solo se exponen enmascaradas (`****last4`).
+- JWT stateless: `logout` descarta el token en el cliente; revocación real (blacklist) en FASE 17.
+- `httpx` es dependencia de runtime (pruebas de conexión de proveedores).

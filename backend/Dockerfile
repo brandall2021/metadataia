@@ -12,7 +12,9 @@ COPY alembic.ini ./
 COPY alembic ./alembic
 COPY tests ./tests
 
-RUN pip install --upgrade pip && pip install ".[dev]"
+# Instalacion editable: el codigo montado por volumen en desarrollo siempre gana
+# sobre la copia que quedaria en site-packages (evita imports obsoletos).
+RUN pip install --upgrade pip && pip install -e ".[dev]"
 
 EXPOSE 8000
 

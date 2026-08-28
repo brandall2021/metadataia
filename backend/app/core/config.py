@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     # --- Entorno -----------------------------------------------------------
     app_name: str = "METADATAIA"
     app_env: str = "development"
-    app_secret_key: str = "cambiar-en-produccion"
+    app_secret_key: str = "clave-desarrollo-metadataia-32-caracteres-minimo"
 
     # --- Base de datos ------------------------------------------------------
     database_url: str = Field(
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
 
     # --- JWT -----------------------------------------------------------------
-    jwt_secret: str = "cambiar-en-produccion"
+    jwt_secret: str = "clave-jwt-desarrollo-metadataia-32-caracteres-minimo"
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 30
 

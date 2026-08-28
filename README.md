@@ -14,7 +14,9 @@ Fases del plan (spec §41):
 |------|-------------|--------|
 | 1 | Inicialización (repo, estructura, Docker Compose, .env) | ✅ |
 | 2 | Base de datos (modelos, migraciones, seeds) | ✅ |
-| 3–18 | Autenticación, IA, metadatos, PDF, OCR, revisión, DSpace, auditoría, tests, seguridad, producción | Pendiente (incremental) |
+| 3 | Autenticación (login, JWT, RBAC, usuarios, roles, permisos) | ✅ |
+| 4 | Administración IA (proveedores, modelos, prueba de conexión) | ✅ |
+| 5–18 | Agentes IA, metadatos, PDF, OCR, revisión, DSpace, auditoría, tests, seguridad, producción | Pendiente (incremental) |
 
 ## Requisitos
 

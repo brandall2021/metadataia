@@ -4,10 +4,10 @@ Idempotente: puede ejecutarse multiples veces sin duplicar datos.
 Requiere que las migraciones esten aplicadas (make migrate).
 """
 
-import bcrypt
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
+from app.core.security import hash_password
 from app.models import Permission, Role, User
 from app.models.user import role_permissions, user_roles
 
@@ -57,10 +57,6 @@ USERS = [
     {"username": "revisor", "email": "revisor@example.com", "password": "metadataia123",
      "first_name": "Ramiro", "last_name": "Revisor", "roles": ["REVISOR"]},
 ]
-
-
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def run(db: Session) -> None:
