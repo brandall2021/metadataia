@@ -1,0 +1,187 @@
+"""Motor de PDF (FASE 7): upload, SHA256, analisis y almacenamiento.
+
+Criterio: el PDF queda almacenado (MinIO/filesystem) y analizado
+(validacion, paginas, existencia de texto, necesidad de OCR).
+El archivo original nunca se modifica.
+"""
+
+import io
+import uuid
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import Response
+from sqlalchemy.orm import Session
+
+from app.core import storage
+from app.core.config import settings
+from app.core.database import get_db
+from app.core.dependencies import require_permission
+from app.core.storage import StorageError
+from app.models import Document, DocumentPage, DocumentType, User
+from app.pdf import analyzer
+from app.pdf.schemas import DocumentDetailOut, DocumentOut, DocumentPageOut
+
+router = APIRouter(prefix="/documents", tags=["documents"])
+
+can_upload = require_permission("document.upload")
+can_view = require_permission("document.view")
+
+
+def _page_out(page: DocumentPage) -> DocumentPageOut:
+    return DocumentPageOut(
+        id=page.id,
+        page_number=page.page_number,
+        text=page.text,
+        text_length=page.text_length,
+        ocr_used=page.ocr_used,
+    )
+
+
+def _doc_out(doc: Document) -> DocumentOut:
+    return DocumentOut(
+        id=doc.id,
+        original_filename=doc.original_filename,
+        mime_type=doc.mime_type,
+        file_size=doc.file_size,
+        sha256=doc.sha256,
+        page_count=doc.page_count,
+        needs_ocr=doc.needs_ocr,
+        status=doc.status,
+        created_at=doc.created_at,
+    )
+
+
+def _doc_detail_out(doc: Document) -> DocumentDetailOut:
+    total_text = sum(len(p.text or "") for p in doc.pages)
+    return DocumentDetailOut(
+        **_doc_out(doc).model_dump(),
+        document_type_id=doc.document_type_id,
+        pages=[_page_out(p) for p in sorted(doc.pages, key=lambda p: p.page_number)],
+        analysis={
+            "total_text_length": total_text,
+            "needs_ocr": doc.needs_ocr,
+            "status": doc.status,
+        },
+    )
+
+
+@router.post("", response_model=DocumentDetailOut, status_code=201)
+def upload_document(
+    file: UploadFile = File(...),
+    document_type_id: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(can_upload),
+):
+    filename = file.filename or ""
+
+    if not analyzer.is_valid_extension(filename):
+        raise HTTPException(status_code=422, detail="Solo se aceptan archivos PDF (.pdf)")
+    content_type = file.content_type or "application/octet-stream"
+    if not analyzer.is_valid_pdf_mime(content_type) and content_type != "application/octet-stream":
+        raise HTTPException(status_code=422, detail="El MIME del archivo debe ser application/pdf")
+
+    data = file.file.read()
+    if not data:
+        raise HTTPException(status_code=422, detail="El archivo esta vacio")
+    if len(data) > analyzer.max_upload_bytes():
+        raise HTTPException(
+            status_code=413, detail=f"Excede el tamano maximo de {settings.default_max_file_size_mb} MB"
+        )
+
+    try:
+        analysis = analyzer.analyze_pdf(data)
+    except analyzer.InvalidPDFError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    sha256 = analyzer.sha256_of(data)
+
+    existing = db.query(Document).filter(Document.sha256 == sha256).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="El documento ya fue cargado anteriormente")
+
+    if document_type_id:
+        try:
+            doc_type_uuid = uuid.UUID(document_type_id)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Tipo documental no valido")
+        if db.get(DocumentType, doc_type_uuid) is None:
+            raise HTTPException(status_code=404, detail="Tipo documental no encontrado")
+
+    try:
+        storage_key = storage.upload_original(sha256, data, content_type)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail="No se pudo almacenar el archivo") from exc
+
+    doc = Document(
+        original_filename=filename,
+        storage_path=storage_key,
+        mime_type=content_type,
+        file_size=len(data),
+        sha256=sha256,
+        page_count=analysis["page_count"],
+        needs_ocr=analysis["needs_ocr"],
+        status="UPLOADED",
+        uploaded_by=user.id,
+    )
+    if document_type_id:
+        doc.document_type_id = uuid.UUID(document_type_id)
+    db.add(doc)
+    db.flush()
+    for i, text in enumerate(analysis["pages_text"], start=1):
+        db.add(
+            DocumentPage(
+                document_id=doc.id,
+                page_number=i,
+                text=text,
+                text_length=len(text),
+                ocr_used=False,
+            )
+        )
+    db.commit()
+    db.refresh(doc)
+    return _doc_detail_out(doc)
+
+
+@router.get("", response_model=list[DocumentOut])
+def list_documents(db: Session = Depends(get_db), _: User = Depends(can_view)):
+    docs = db.query(Document).order_by(Document.created_at.desc()).all()
+    return [_doc_out(d) for d in docs]
+
+
+@router.get("/{document_id}", response_model=DocumentDetailOut)
+def get_document(document_id: str, db: Session = Depends(get_db), _: User = Depends(can_view)):
+    doc = db.get(Document, uuid.UUID(document_id))
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    return _doc_detail_out(doc)
+
+
+@router.get("/{document_id}/download")
+def download_document(document_id: str, db: Session = Depends(get_db), _: User = Depends(can_view)):
+    doc = db.get(Document, uuid.UUID(document_id))
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    try:
+        content = storage.download_original(doc.storage_path)
+    except StorageError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    filename = doc.original_filename or f"{doc.sha256 or doc.id}.pdf"
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.delete("/{document_id}", status_code=204)
+def delete_document(document_id: str, db: Session = Depends(get_db), _: User = Depends(can_upload)):
+    try:
+        doc_uuid = uuid.UUID(document_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Documento no valido")
+    doc = db.get(Document, doc_uuid)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    storage.delete_original(doc.storage_path)
+    db.delete(doc)
+    db.commit()

@@ -54,6 +54,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-secret-jwt-de-desarrollo}
     volumes:
       - ./backend/app:/app/app
+      - ./backend/pyproject.toml:/app/pyproject.toml
       - ./backend/alembic.ini:/app/alembic.ini
       - ./backend/alembic:/app/alembic
       - ./backend/tests:/app/tests
@@ -81,6 +82,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-secret-jwt-de-desarrollo}
     volumes:
       - ./backend/app:/app/app
+      - ./backend/pyproject.toml:/app/pyproject.toml
       - ./backend/alembic.ini:/app/alembic.ini
       - ./backend/alembic:/app/alembic
       - ./backend/tests:/app/tests

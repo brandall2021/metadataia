@@ -6,12 +6,15 @@ from sqlalchemy.orm import Session
 from app.auth.router import router as auth_router
 from app.ai.router import router as ai_admin_router
 from app.metadata.router import router as metadata_router
+from app.pdf.router import router as documents_router
+from app.core import storage
 from app.core.config import settings
 from app.core.database import get_db
 from app.users.router import router as users_router
 
 
 def create_app() -> FastAPI:
+    storage.ensure_bucket()
     app = FastAPI(
         title=settings.app_name,
         version="0.1.0",
@@ -31,6 +34,7 @@ def create_app() -> FastAPI:
     app.include_router(users_router, prefix="/api")
     app.include_router(ai_admin_router, prefix="/api")
     app.include_router(metadata_router, prefix="/api")
+    app.include_router(documents_router, prefix="/api")
 
     @app.get("/health", tags=["core"])
     def health(db: Session = Depends(get_db)) -> dict:

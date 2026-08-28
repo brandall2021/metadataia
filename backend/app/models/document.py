@@ -24,6 +24,7 @@ class Document(Base):
         Uuid, ForeignKey("repository_collections.id", ondelete="SET NULL")
     )
     status: Mapped[str] = mapped_column(String(50), default="UPLOADED", index=True)
+    needs_ocr: Mapped[bool] = mapped_column(Boolean, default=False)
     uploaded_by: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="SET NULL")
     )

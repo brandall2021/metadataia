@@ -62,6 +62,8 @@ Paquetes por dominio, espejando la spec §5:
 | `extraction/` | Extracción de texto página por página (F8) |
 | `ai/` | Proveedores y modelos + prueba de conexión (F4 ✅); agentes, prompts con variables, versiones (F5 ✅); extracción estructurada (F9) |
 | `metadata/` | Esquemas, campos, vocabularios (+CSV, sinónimos, normalización) y tipos documentales (F6 ✅; F10 normalizador, F11 reglas) |
+| `pdf/` | Motor de PDF: upload, SHA256, validación, análisis de texto y necesidad de OCR (F7 ✅); OCR y extracción de texto (F8) |
+| `core/storage.py` | Almacenamiento de objetos S3/MinIO o filesystem (`STORAGE_BACKEND`); originales intactos bajo `documents/{sha256}.pdf` (F7) |
 | `metadata/` | Esquemas, campos, vocabularios, normalización (F6, F10) |
 | `validation/` | Reglas de validación, errores y warnings (F11) |
 | `snrd/` | Validación de interoperabilidad SNRD (F11) |

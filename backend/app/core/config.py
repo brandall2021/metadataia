@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     minio_secret_key: str = "metadataia-secret"
     minio_bucket: str = "metadataia"
     storage_backend: str = "s3"  # s3 | filesystem
+    local_storage_path: str = "data/storage"
 
     # --- Reglas generales (FASE 40) -------------------------------------------
     default_max_file_size_mb: int = 100

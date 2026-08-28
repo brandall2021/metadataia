@@ -12,7 +12,7 @@ Todo se administra desde el panel y se persiste en base de datos — **no se har
 |---|---|
 | Repositorio | https://github.com/brandall2021/metadataia |
 | Documentación | `docs/` (SPECIFICATION, ARCHITECTURE, y por dominio) |
-| Estado | FASE 7 en curso ✅ F1–F6 completadas |
+| Estado | FASE 8 en curso · ✅ F1–F7 completadas |
 
 ---
 
@@ -49,8 +49,8 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 | 4 | Administración IA (proveedores, modelos, prueba de conexión) | ✅ |
 | 5 | Agentes IA (CRUD, prompts con variables, versiones, clonar, probar) | ✅ |
 | 6 | Metadatos (esquemas, campos, vocabularios, tipos documentales) | ✅ |
-| 7 | PDF (upload, SHA256, análisis, almacenamiento) | 🔨 En curso |
-| 8 | OCR (detección de texto, OCRmyPDF, Tesseract, extracción por página) | ⏳ |
+| 7 | PDF (upload, SHA256, análisis, almacenamiento) | ✅ |
+| 8 | OCR (detección de texto, OCRmyPDF, Tesseract, extracción por página) | 🔨 En curso |
 | 9 | IA (selección de agente, prompt, JSON Schema, extracción, confidence, evidencia) | ⏳ |
 | 10 | Normalización (vocabularios, fechas, idioma, tipos, derechos, identificadores) | ⏳ |
 | 11 | Validación (reglas, errores, warnings, SNRD) | ⏳ |
@@ -84,6 +84,11 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 - **Vocabularios**: CRUD, valores, **sinónimos**, activar/desactivar, **importación CSV** idempotente y endpoint de normalización (minúsculas + sin acentos, incluye sinónimos).
 - **Tipos documentales** (Tesis, Artículo, Resolución…) con **agente IA por defecto** y **asociación de campos** (orden, `required_override`).
 - **Frontend dinámico**: el formulario de carga se construye desde la configuración; un campo nuevo aparece automáticamente sin tocar código.
+
+### Motor de PDF (FASE 7)
+- `POST /api/documents`: validación de extensión, MIME, PDF válido, tamaño máximo configurable, **SHA256**, deduplicación (409), almacenamiento del **original sin modificar** (MinIO S3 o filesystem), conteo de páginas y análisis de texto por página.
+- Detección de **necesidad de OCR**: un PDF escaneado (sin texto) queda marcado `needs_ocr=true` para la FASE 8.
+- Listado, detalle (páginas + análisis), **descarga del original** (verificación por SHA256) y borrado (documento + objeto de almacenamiento).
 
 ### Frontend de administración
 - `/login`: autenticación.
