@@ -9,6 +9,7 @@ Tipos soportados:
 - anthropic: API /v1/messages (x-api-key + anthropic-version).
 """
 
+import re
 import time
 
 import httpx
@@ -52,6 +53,43 @@ def _error_result(start: float, message: str, detail: str | None = None) -> dict
     }
 
 
+def render_prompt(template: str, context: dict) -> str:
+    """Rellena variables {{name}} de la plantilla con el contexto dado.
+
+    Solo se reemplazan variables conocidas; las desconocidas quedan intactas
+    (genera una plantilla segura: el contenido del documento nunca modifica
+    instrucciones, solo ocupa el placeholder — spec sec. 10).
+    """
+    if not template:
+        return ""
+
+    def _replace(match: "re.Match[str]") -> str:
+        key = match.group(1).strip()
+        if key in context:
+            return str(context[key])
+        return match.group(0)
+
+    return re.sub(r"\{\{\s*(\w+)\s*\}\}", _replace, template)
+
+
+TEST_CONTEXT = {
+    "document_type": "[tipo documental]",
+    "metadata_schema": "[esquema de metadatos]",
+    "metadata_fields": "[campos de metadatos]",
+    "document_text": "[texto del documento extraido, pagina 1 de N]",
+    "language": "es",
+    "institution": "[institucion]",
+    "repository": "[repositorio]",
+}
+
+
+def _test_context(document_text: str | None) -> dict:
+    context = dict(TEST_CONTEXT)
+    if document_text:
+        context["document_text"] = document_text
+    return context
+
+
 def test_provider(
     base_url: str | None,
     api_key: str | None,
@@ -78,6 +116,65 @@ def test_provider(
         return _error_result(
             start, f"Error HTTP {resp.status_code}", resp.text[:300]
         )
+    except httpx.HTTPError as exc:
+        return _error_result(start, "Error de conexion", str(exc))
+
+
+def test_agent_prompt(
+    base_url: str | None,
+    api_key: str | None,
+    model_identifier: str,
+    provider_type: str,
+    system_prompt: str | None,
+    extraction_prompt: str | None,
+    document_text: str | None = None,
+    max_tokens: int | None = None,
+) -> dict:
+    """Prueba minima de un agente: envia su prompt real con variables de ejemplo."""
+    start = time.monotonic()
+    base = _base(base_url, provider_type)
+    if not base:
+        return _error_result(start, "URL del proveedor no configurada")
+
+    context = _test_context(document_text)
+    user_message = render_prompt(extraction_prompt or "", context)
+    system_message = system_prompt or ""
+
+    headers = _headers(provider_type, api_key)
+    if provider_type == "anthropic":
+        url = f"{base}/v1/messages"
+        body = {
+            "model": model_identifier,
+            "max_tokens": max_tokens or 64,
+            "system": system_message,
+            "messages": [{"role": "user", "content": user_message}],
+        }
+    else:
+        url = f"{base}/chat/completions"
+        messages = []
+        if system_message:
+            messages.append({"role": "system", "content": system_message})
+        messages.append({"role": "user", "content": user_message})
+        body = {"model": model_identifier, "max_tokens": max_tokens or 100, "messages": messages}
+    try:
+        with _http() as client:
+            resp = client.post(url, json=body, headers=headers)
+        if resp.status_code < 400:
+            data = resp.json()
+            content = ""
+            if provider_type == "anthropic":
+                content = " ".join(
+                    b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"
+                )
+            else:
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            return {
+                "ok": True,
+                "message": "El agente respondio correctamente",
+                "time_ms": round((time.monotonic() - start) * 1000, 1),
+                "detail": content[:400],
+            }
+        return _error_result(start, f"Error HTTP {resp.status_code}", resp.text[:300])
     except httpx.HTTPError as exc:
         return _error_result(start, "Error de conexion", str(exc))
 

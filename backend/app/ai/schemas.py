@@ -93,3 +93,75 @@ class TestResult(BaseModel):
     message: str
     time_ms: float
     detail: str | None = None
+
+
+# --- Agentes ----------------------------------------------------------------
+
+
+class AgentCreate(BaseModel):
+    name: str = Field(min_length=1)
+    code: str = Field(min_length=1)
+    description: str | None = None
+    document_type_id: str | None = None
+    active: bool = True
+    model_id: str
+    system_prompt: str | None = None
+    extraction_prompt: str | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    output_schema_json: dict | None = None
+    configuration_json: dict | None = None
+
+
+class AgentUpdate(BaseModel):
+    name: str | None = None
+    code: str | None = None
+    description: str | None = None
+    document_type_id: str | None = None
+    active: bool | None = None
+    model_id: str | None = None
+    system_prompt: str | None = None
+    extraction_prompt: str | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    output_schema_json: dict | None = None
+    configuration_json: dict | None = None
+
+
+class AgentVersionCreate(BaseModel):
+    model_id: str
+    system_prompt: str | None = None
+    extraction_prompt: str | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    output_schema_json: dict | None = None
+    configuration_json: dict | None = None
+
+
+class AgentVersionOut(BaseModel):
+    id: str
+    agent_id: str
+    version_number: int
+    model_id: str
+    model_name: str
+    model_identifier: str
+    system_prompt: str | None = None
+    extraction_prompt: str | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    output_schema_json: dict | None = None
+    configuration_json: dict | None = None
+    active: bool
+    created_at: datetime
+
+
+class AgentOut(BaseModel):
+    id: str
+    name: str
+    code: str
+    description: str | None = None
+    document_type_id: str | None = None
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+    current_version: AgentVersionOut | None = None

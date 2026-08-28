@@ -69,7 +69,10 @@ class AIAgent(Base):
     )
 
     versions: Mapped[list["AIAgentVersion"]] = relationship(
-        back_populates="agent", foreign_keys="AIAgentVersion.agent_id"
+        back_populates="agent",
+        foreign_keys="AIAgentVersion.agent_id",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     current_version: Mapped["AIAgentVersion | None"] = relationship(
         foreign_keys=[current_version_id], post_update=True

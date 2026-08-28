@@ -16,7 +16,8 @@ Fases del plan (spec §41):
 | 2 | Base de datos (modelos, migraciones, seeds) | ✅ |
 | 3 | Autenticación (login, JWT, RBAC, usuarios, roles, permisos) | ✅ |
 | 4 | Administración IA (proveedores, modelos, prueba de conexión) | ✅ |
-| 5–18 | Agentes IA, metadatos, PDF, OCR, revisión, DSpace, auditoría, tests, seguridad, producción | Pendiente (incremental) |
+| 5 | Agentes IA (CRUD, prompts variables, versiones, clonar, probar) | ✅ |
+| 6–18 | Metadatos, PDF, OCR, revisión, DSpace, auditoría, tests, seguridad, producción | Pendiente (incremental) |
 
 ## Requisitos
 

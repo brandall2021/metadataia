@@ -60,7 +60,7 @@ Paquetes por dominio, espejando la spec §5:
 | `pdf/` | Motor PDF: validación, SHA256, análisis (F7) |
 | `ocr/` | OCRmyPDF + Tesseract (F8) |
 | `extraction/` | Extracción de texto página por página (F8) |
-| `ai/` | Proveedores y modelos + prueba de conexión (F4 ✅); agentes y prompts (F5, F9) |
+| `ai/` | Proveedores y modelos + prueba de conexión (F4 ✅); agentes, prompts con variables, versiones (F5 ✅); extracción estructurada (F9) |
 | `metadata/` | Esquemas, campos, vocabularios, normalización (F6, F10) |
 | `validation/` | Reglas de validación, errores y warnings (F11) |
 | `snrd/` | Validación de interoperabilidad SNRD (F11) |
@@ -115,6 +115,8 @@ DEPOSITING → DEPOSITED` (con `REJECTED` y `ERROR`).
 - El firewall del hosting bloquea tráfico a rangos privados; ver `scripts/patch-firewall.sh`.
 - Los FKs circulares (`ai_agents ↔ document_types`, `ai_agents → ai_agent_versions`)
   se crean diferidos (`use_alter`) en la migración inicial.
+- `AIAgent.versions` se elimina con `cascade="all, delete-orphan" + passive_deletes`
+  (la FK `agent_id` es NOT NULL; sin esto el ORM intentaría anularla al borrar el agente).
 - API Keys de proveedores se cifran en reposo (Fernet derivado de `APP_SECRET_KEY`)
   y solo se exponen enmascaradas (`****last4`).
 - JWT stateless: `logout` descarta el token en el cliente; revocación real (blacklist) en FASE 17.
