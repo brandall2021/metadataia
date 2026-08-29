@@ -17,7 +17,8 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import require_permission
 from app.core.storage import StorageError
-from app.models import Document, DocumentPage, DocumentType, User
+from app.jobs.celery_app import celery_app
+from app.models import Document, DocumentPage, DocumentType, ProcessingJob, User
 from app.pdf import analyzer
 from app.pdf.schemas import DocumentDetailOut, DocumentOut, DocumentPageOut
 
@@ -53,6 +54,19 @@ def _doc_out(doc: Document) -> DocumentOut:
 
 def _doc_detail_out(doc: Document) -> DocumentDetailOut:
     total_text = sum(len(p.text or "") for p in doc.pages)
+    jobs = [
+        {
+            "id": str(j.id),
+            "job_type": j.job_type,
+            "status": j.status,
+            "progress": j.progress,
+            "started_at": j.started_at,
+            "finished_at": j.finished_at,
+            "error_message": j.error_message,
+            "metadata_json": j.metadata_json or {},
+        }
+        for j in sorted(doc.jobs, key=lambda j: (j.created_at or j.started_at) or j.id, reverse=False)
+    ]
     return DocumentDetailOut(
         **_doc_out(doc).model_dump(),
         document_type_id=doc.document_type_id,
@@ -62,7 +76,17 @@ def _doc_detail_out(doc: Document) -> DocumentDetailOut:
             "needs_ocr": doc.needs_ocr,
             "status": doc.status,
         },
+        jobs=jobs,
     )
+
+
+def _enqueue_ocr(db: Session, doc: Document) -> ProcessingJob:
+    job = ProcessingJob(document_id=doc.id, job_type="OCR", status="PENDING")
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    celery_app.send_task("app.jobs.tasks.run_ocr", args=[str(doc.id)])
+    return job
 
 
 @router.post("", response_model=DocumentDetailOut, status_code=201)
@@ -139,6 +163,8 @@ def upload_document(
         )
     db.commit()
     db.refresh(doc)
+    if doc.needs_ocr and settings.auto_ocr:
+        _enqueue_ocr(db, doc)
     return _doc_detail_out(doc)
 
 
@@ -154,6 +180,26 @@ def get_document(document_id: str, db: Session = Depends(get_db), _: User = Depe
     if doc is None:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
     return _doc_detail_out(doc)
+
+
+@router.post("/{document_id}/ocr", status_code=202)
+def request_ocr(document_id: str, db: Session = Depends(get_db), _: User = Depends(can_upload)):
+    try:
+        doc_uuid = uuid.UUID(document_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Documento no valido")
+    doc = db.get(Document, doc_uuid)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    if not doc.needs_ocr:
+        raise HTTPException(status_code=409, detail="El documento tiene texto; no requiere OCR")
+    job = _enqueue_ocr(db, doc)
+    return {
+        "status": "QUEUED",
+        "job_id": str(job.id),
+        "document_id": str(doc.id),
+        "message": "OCR encolado; consulte el detalle del documento para ver el progreso",
+    }
 
 
 @router.get("/{document_id}/download")
@@ -183,5 +229,7 @@ def delete_document(document_id: str, db: Session = Depends(get_db), _: User = D
     if doc is None:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
     storage.delete_original(doc.storage_path)
+    if doc.sha256 and storage.object_exists(f"ocr/{doc.sha256}.pdf"):
+        storage.delete_object(f"ocr/{doc.sha256}.pdf")
     db.delete(doc)
     db.commit()

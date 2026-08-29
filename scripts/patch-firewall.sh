@@ -7,7 +7,7 @@
 #   -A INPUT  -s 172.16.0.0/12 -j DROP     (trafico de retorno de contenedores)
 #   -A OUTPUT -d 172.16.0.0/12 -j DROP     (paquetes hacia contenedores)
 #
-# Docker usa redes privadas (172.17.0.0/16 docker0, 172.19.0.0/16 metadato),
+# Docker usa redes privadas (172.17.0.0/16 docker0, 172.18/172.19/etc metadato).
 # por lo que sin estas excepciones el host NO puede alcanzar los contenedores
 # (los contenedores SI se comunican entre si dentro del bridge).
 #
@@ -19,8 +19,7 @@
 set -euo pipefail
 
 BRIDGES=(
-  "172.17.0.0/16"
-  "172.19.0.0/16"
+  "172.16.0.0/12"
 )
 
 insert_input_established() {

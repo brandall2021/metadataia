@@ -30,3 +30,11 @@ class DocumentDetailOut(DocumentOut):
     document_type_id: uuid.UUID | None
     pages: list[DocumentPageOut] = []
     analysis: dict = {}
+    jobs: list[dict] = []
+
+
+class OcrRequestOut(BaseModel):
+    status: str
+    job_id: uuid.UUID
+    document_id: uuid.UUID
+    message: str

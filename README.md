@@ -12,7 +12,7 @@ Todo se administra desde el panel y se persiste en base de datos — **no se har
 |---|---|
 | Repositorio | https://github.com/brandall2021/metadataia |
 | Documentación | `docs/` (SPECIFICATION, ARCHITECTURE, y por dominio) |
-| Estado | FASE 8 en curso · ✅ F1–F7 completadas |
+| Estado | FASE 9 en curso · ✅ F1–F8 completadas |
 
 ---
 
@@ -50,7 +50,8 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 | 5 | Agentes IA (CRUD, prompts con variables, versiones, clonar, probar) | ✅ |
 | 6 | Metadatos (esquemas, campos, vocabularios, tipos documentales) | ✅ |
 | 7 | PDF (upload, SHA256, análisis, almacenamiento) | ✅ |
-| 8 | OCR (detección de texto, OCRmyPDF, Tesseract, extracción por página) | 🔨 En curso |
+| 8 | OCR (detección de texto, OCRmyPDF, Tesseract, extracción por página) | ✅ |
+| 9 | Extracción de metadatos con IA (extracción de campos, OCR + IA) | 🔨 En curso |
 | 9 | IA (selección de agente, prompt, JSON Schema, extracción, confidence, evidencia) | ⏳ |
 | 10 | Normalización (vocabularios, fechas, idioma, tipos, derechos, identificadores) | ⏳ |
 | 11 | Validación (reglas, errores, warnings, SNRD) | ⏳ |
@@ -89,6 +90,13 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 - `POST /api/documents`: validación de extensión, MIME, PDF válido, tamaño máximo configurable, **SHA256**, deduplicación (409), almacenamiento del **original sin modificar** (MinIO S3 o filesystem), conteo de páginas y análisis de texto por página.
 - Detección de **necesidad de OCR**: un PDF escaneado (sin texto) queda marcado `needs_ocr=true` para la FASE 8.
 - Listado, detalle (páginas + análisis), **descarga del original** (verificación por SHA256) y borrado (documento + objeto de almacenamiento).
+
+### OCR de documentos escaneados (FASE 8)
+- Pipeline Celery: `run_ocr` ejecuta **OCRmyPDF + Tesseract** (`spa+eng+por` configurable) sobre el original sin modificarlo y genera un **PDF buscable** (`ocr/{sha256}.pdf` en MinIO/S3).
+- **Auto-encolado**: `AUTO_OCR=true` encola OCR automáticamente al subir un PDF detectado como escaneado; también se puede solicitar bajo demanda con `POST /api/documents/{id}/ocr`.
+- **Registro completo** por job (`ProcessingJob`): herramienta, versión, idiomas, tiempo de ejecución, páginas procesadas y errores (`metadata_json`), con estados `PENDING → RUNNING → COMPLETED|ERROR`.
+- Extracción del texto **página por página** del PDF buscable, actualizando `document_pages.text`, `text_length` y `ocr_used`; el documento pasa a estado `OCR_COMPLETED`.
+- Detalle del documento incluye el histórico de jobs (`/api/documents/{id}`).
 
 ### Frontend de administración
 - `/login`: autenticación.
@@ -139,7 +147,10 @@ Diagrama y decisiones: [`ARCHITECTURE.md`](ARCHITECTURE.md).
 │   │   ├── users/           # usuarios, roles, permisos (admin)
 │   │   ├── ai/              # proveedores, modelos, agentes (admin) + propagación IA (F9)
 │   │   ├── metadata/        # esquemas, campos, vocabularios, tipos documentales (admin)
-│   │   ├── core/            # security (bcrypt/JWT/Fernet), dependencies (RBAC), config
+│   │   ├── pdf/             # motor PDF: upload, análisis, dedup, descarga (F7)
+│   │   ├── ocr/             # motor OCR: OCRmyPDF+Tesseract, extracción por página (F8)
+│   │   ├── jobs/            # Celery (celery_app + tareas: run_ocr y placeholders)
+│   │   ├── core/            # security (bcrypt/JWT/Fernet), dependencies (RBAC), config, storage (S3/filesystem)
 │   │   ├── models/          # SQLAlchemy (migrados con Alembic)
 │   │   ├── seed.py          # datos iniciales idempotentes
 │   │   └── main.py          # factory de la app (monta routers /health /api)
@@ -175,7 +186,7 @@ cp .env.example .env          # ajustar credenciales (claves JWT/secret ≥ 32 c
 make dev-up                   # construye y levanta todos los servicios
 make migrate                  # aplica migraciones (alembic upgrade head)
 make seed                     # carga datos iniciales (usuarios/roles/permisos)
-make test                     # 80 tests del backend
+make test                     # 103 tests del backend
 ```
 
 | Servicio | URL |
@@ -258,14 +269,14 @@ make test                    # dentro del contenedor api (instala editable si fa
 docker compose exec api pytest tests/test_ai_agents.py -q   # un grupo
 ```
 
-Estado actual: **80 tests en verde** (smoke, auth, users, ai_admin, agents, metadata). Los endpoints externos (IA, DSpace) se simulan con `httpx.MockTransport`.
+Estado actual: **103 tests en verde** (smoke, auth, users, ai_admin, agents, metadata, pdf, ocr). Los endpoints externos (IA, DSpace) se simulan con `httpx.MockTransport`; el motor OCR se prueba con mocks deterministas y en vivo contra Tesseract real.
 
 ---
 
 ## 13. Roadmap
 
-- **En curso**: FASE 7 — Motor PDF (upload, SHA256, análisis, almacenamiento en MinIO).
-- **Siguientes**: OCR (8) → extracción IA (9) → normalización (10) → validación SNRD (11) → revisión humana (12) → DSpace (13) → auditoría (14) → dashboard (15) → tests e2e (16) → seguridad (17) → producción (18).
+- **En curso**: FASE 9 — Extracción de metadatos con IA (campos del esquema, OCR + IA).
+- **Siguientes**: normalización (10) → validación SNRD (11) → revisión humana (12) → DSpace (13) → auditoría (14) → dashboard (15) → tests e2e (16) → seguridad (17) → producción (18).
 
 ---
 

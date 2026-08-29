@@ -36,11 +36,21 @@ class Document(Base):
     pages: Mapped[list["DocumentPage"]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )
-    jobs: Mapped[list["ProcessingJob"]] = relationship(back_populates="document")
-    extraction_runs: Mapped[list["ExtractionRun"]] = relationship(back_populates="document")
-    metadata_records: Mapped[list["MetadataRecord"]] = relationship(back_populates="document")
-    validation_results: Mapped[list["ValidationResult"]] = relationship(back_populates="document")
-    depositions: Mapped[list["Deposition"]] = relationship(back_populates="document")
+    jobs: Mapped[list["ProcessingJob"]] = relationship(
+        back_populates="document", passive_deletes=True
+    )
+    extraction_runs: Mapped[list["ExtractionRun"]] = relationship(
+        back_populates="document", passive_deletes=True
+    )
+    metadata_records: Mapped[list["MetadataRecord"]] = relationship(
+        back_populates="document", passive_deletes=True
+    )
+    validation_results: Mapped[list["ValidationResult"]] = relationship(
+        back_populates="document", passive_deletes=True
+    )
+    depositions: Mapped[list["Deposition"]] = relationship(
+        back_populates="document", passive_deletes=True
+    )
     document_type: Mapped["DocumentType | None"] = relationship()  # noqa: F821
 
 
@@ -70,6 +80,7 @@ class ProcessingJob(Base):
     job_type: Mapped[str] = mapped_column(String(100), nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="PENDING")
     progress: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error_message: Mapped[str | None] = mapped_column(Text)

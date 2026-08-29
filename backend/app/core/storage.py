@@ -43,9 +43,8 @@ def _filesystem_path(key: str) -> Path:
     return Path(settings.local_storage_path) / key
 
 
-def upload_original(sha256: str, data: bytes, content_type: str = "application/pdf") -> str:
-    """Guarda el archivo original y devuelve la clave de almacenamiento."""
-    key = f"documents/{sha256}.pdf"
+def upload_object(key: str, data: bytes, content_type: str = "application/pdf") -> str:
+    """Guarda un objeto y devuelve su clave de almacenamiento."""
     if settings.storage_backend == "filesystem":
         path = _filesystem_path(key)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -54,6 +53,16 @@ def upload_original(sha256: str, data: bytes, content_type: str = "application/p
     client = _s3_client()
     client.put_object(Bucket=settings.minio_bucket, Key=key, Body=data, ContentType=content_type)
     return key
+
+
+def upload_original(sha256: str, data: bytes, content_type: str = "application/pdf") -> str:
+    """Guarda el archivo original (nunca se modifica) bajo documents/{sha256}.pdf."""
+    return upload_object(f"documents/{sha256}.pdf", data, content_type)
+
+
+def upload_searchable(sha256: str, data: bytes) -> str:
+    """Guarda el PDF buscable generado por OCR bajo ocr/{sha256}.pdf."""
+    return upload_object(f"ocr/{sha256}.pdf", data, "application/pdf")
 
 
 def download_original(key: str) -> bytes:
@@ -77,6 +86,10 @@ def delete_original(key: str) -> None:
         return
     client = _s3_client()
     client.delete_object(Bucket=settings.minio_bucket, Key=key)
+
+
+def delete_object(key: str) -> None:
+    delete_original(key)
 
 
 def object_exists(key: str) -> bool:
