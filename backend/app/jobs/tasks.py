@@ -11,14 +11,19 @@ from app.extraction import engine
 from app.normalization import engine as norm_engine
 from app.jobs.celery_app import celery_app
 from app.models import (
+    Deposition,
     Document,
     ExtractionRun,
     MetadataRecord,
     ProcessingJob,
+    Repository,
+    RepositoryCollection,
     ValidationResult,
     VocabularyValue,
 )
 from app.ocr import engine as ocr_engine
+from app.dspace.connector import build_connector
+from app.snrd.export import dc_fields
 from app.snrd.validator import validate_snrd
 from app.validation import engine as validation_engine
 
@@ -491,3 +496,173 @@ def validate_metadata(document_id: str) -> dict:
 def deposit_dspace(document_id: str) -> dict:
     """Job placeholder: deposito en DSpace (FASE 13)."""
     return {"document_id": document_id, "status": "PENDING"}
+
+
+@shared_task(name="app.jobs.tasks.deposit_document")
+def deposit_document(document_id: str) -> dict:
+    """Deposito de un documento aprobado en DSpace (FASE 13).
+
+    Flujo: APPOVED -> validacion final -> workspace item -> metadata SNRD-DC
+    -> PDF -> submission -> registro del resultado (Deposition). Si algo
+    falla el documento vuelve a APPROVED (reintento permitido) y el error
+    queda en el job y en la deposicion. Un deposito exitoso no se duplica
+    (guard por estado del documento y por Deposition COMPLETED).
+    """
+    db = SessionLocal()
+    job = None
+    try:
+        doc = db.get(Document, UUID(document_id))
+        if doc is None:
+            return {"status": "ERROR", "document_id": document_id, "error": "documento no encontrado"}
+
+        job = (
+            db.query(ProcessingJob)
+            .filter(
+                ProcessingJob.document_id == doc.id,
+                ProcessingJob.job_type == "DEPOSIT",
+                ProcessingJob.status == "PENDING",
+            )
+            .order_by(ProcessingJob.created_at.asc())
+            .first()
+        )
+        if job is None:
+            job = ProcessingJob(document_id=doc.id, job_type="DEPOSIT", status="PENDING")
+            db.add(job)
+            db.flush()
+
+        if doc.status == "DEPOSITED":
+            job.status = "NOOP"
+            job.finished_at = datetime.now(timezone.utc)
+            job.metadata_json = {"reason": "ya depositado"}
+            db.commit()
+            return {"status": "NOOP", "document_id": document_id, "reason": "ya depositado"}
+
+        existing = (
+            db.query(Deposition)
+            .filter(Deposition.document_id == doc.id, Deposition.status == "COMPLETED")
+            .first()
+        )
+        if existing is not None:
+            job.status = "NOOP"
+            job.finished_at = datetime.now(timezone.utc)
+            job.metadata_json = {"reason": "ya depositado", "external_item_id": existing.external_item_id}
+            db.commit()
+            return {"status": "NOOP", "document_id": document_id, "reason": "ya depositado"}
+
+        if doc.status != "APPROVED":
+            job.status = "ERROR"
+            job.finished_at = datetime.now(timezone.utc)
+            job.error_message = "el documento no esta APROBADO"
+            db.commit()
+            return {"status": "ERROR", "document_id": document_id, "error": "el documento no esta APROBADO"}
+
+        collection = None
+        if doc.repository_collection_id is not None:
+            collection = db.get(RepositoryCollection, doc.repository_collection_id)
+        elif doc.document_type is not None:
+            collection = next((c for c in doc.document_type.repository_collections if c.active), None)
+        if collection is None:
+            job.status = "ERROR"
+            job.finished_at = datetime.now(timezone.utc)
+            job.error_message = "no hay coleccion configurada para el tipo documental"
+            db.commit()
+            return {"status": "ERROR", "document_id": document_id, "error": "coleccion no configurada"}
+
+        repo: Repository | None = db.get(Repository, collection.repository_id)
+        if repo is None or not repo.active:
+            job.status = "ERROR"
+            job.finished_at = datetime.now(timezone.utc)
+            job.error_message = "repositorio destino no configurado o inactivo"
+            db.commit()
+            return {"status": "ERROR", "document_id": document_id, "error": "repositorio no configurado"}
+
+        vres = validate_metadata(document_id)
+        if vres.get("status") != "COMPLETED" or not vres.get("valid"):
+            job.status = "ERROR"
+            job.finished_at = datetime.now(timezone.utc)
+            job.error_message = "validacion final con errores"
+            db.commit()
+            return {"status": "ERROR", "document_id": document_id, "error": "validacion final con errores"}
+
+        job.status = "RUNNING"
+        job.started_at = datetime.now(timezone.utc)
+        doc.status = "DEPOSITING"
+        dep = Deposition(
+            document_id=doc.id,
+            repository_id=repo.id,
+            collection_id=collection.id,
+            status="RUNNING",
+            started_at=datetime.now(timezone.utc),
+            request_json={"collection": collection.external_id, "collection_name": collection.name},
+        )
+        db.add(dep)
+        db.commit()
+
+        records = (
+            db.query(MetadataRecord)
+            .filter(MetadataRecord.document_id == doc.id, MetadataRecord.value.isnot(None))
+            .all()
+        )
+        metadata = dc_fields(records, identifier=doc.sha256)
+        content = storage.download_original(f"documents/{doc.sha256}.pdf")
+
+        connector = build_connector(repo)
+        token = connector.authenticate()
+        ws = connector.create_workspace_item(collection.external_id or "", token)
+        connector.add_metadata(str(ws.get("id")), metadata, token)
+        bitstream = connector.upload_bitstream(
+            str(ws.get("id")), doc.original_filename or "documento.pdf", content, token
+        )
+        submitted = connector.submit_workspace_item(str(ws.get("id")), token)
+
+        dep.external_item_id = submitted.get("item_uuid")
+        dep.handle = submitted.get("handle")
+        dep.status = "COMPLETED"
+        dep.finished_at = datetime.now(timezone.utc)
+        dep.response_json = {
+            "workspace_item": ws.get("id"),
+            "bitstream": bitstream.get("uuid") or bitstream.get("name"),
+            "item": submitted.get("item_uuid"),
+            "handle": submitted.get("handle"),
+        }
+        doc.status = "DEPOSITED"
+        job.status = "COMPLETED"
+        job.finished_at = datetime.now(timezone.utc)
+        job.metadata_json = {
+            "external_item_id": submitted.get("item_uuid"),
+            "handle": submitted.get("handle"),
+            "workspace_item": ws.get("id"),
+        }
+        db.commit()
+        return {
+            "status": "COMPLETED",
+            "document_id": document_id,
+            "external_item_id": submitted.get("item_uuid"),
+            "handle": submitted.get("handle"),
+        }
+    except Exception as exc:  # noqa: BLE001 - el error queda registrado
+        db.rollback()
+        if job is not None:
+            job = db.get(ProcessingJob, job.id)
+            if job is not None:
+                job.status = "ERROR"
+                job.finished_at = datetime.now(timezone.utc)
+                job.error_message = str(exc)[:2000]
+            dep_row = (
+                db.query(Deposition)
+                .filter(
+                    Deposition.document_id == UUID(document_id),
+                    Deposition.status.in_(["RUNNING", "PENDING"]),
+                )
+                .order_by(Deposition.started_at.asc().nullsfirst(), Deposition.id.asc())
+                .first()
+            )
+            if dep_row is not None:
+                dep_row.status = "FAILED"
+                dep_row.finished_at = datetime.now(timezone.utc)
+                dep_row.error_message = str(exc)[:2000]
+            doc = db.get(Document, UUID(document_id))
+            if doc is not None and doc.status == "DEPOSITING":
+                doc.status = "APPROVED"
+            db.commit()
+        return {"status": "ERROR", "document_id": document_id, "error": str(exc)[:1000]}

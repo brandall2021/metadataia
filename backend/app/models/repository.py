@@ -20,7 +20,9 @@ class Repository(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     configuration_json: Mapped[dict | None] = mapped_column(JSON)
 
-    collections: Mapped[list["RepositoryCollection"]] = relationship(back_populates="repository")
+    collections: Mapped[list["RepositoryCollection"]] = relationship(
+        back_populates="repository", passive_deletes=True
+    )
 
 
 class RepositoryCollection(Base):

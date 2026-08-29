@@ -12,7 +12,7 @@ Todo se administra desde el panel y se persiste en base de datos — **no se har
 |---|---|
 | Repositorio | https://github.com/brandall2021/metadataia |
 | Documentación | `docs/` (SPECIFICATION, ARCHITECTURE, y por dominio) |
-| Estado | ✅ F1–F12 completadas · FASE 13 en curso |
+| Estado | ✅ F1–F13 completadas · FASE 14 en curso |
 
 ---
 
@@ -56,7 +56,7 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 | 10 | Normalización (vocabularios, fechas, idioma, tipos, derechos, identificadores) | ✅ |
 | 11 | Validación (reglas, errores, warnings, SNRD) | ✅ |
 | 12 | Revisión humana (visor, formulario dinámico, edición, evidencia, aprobación) | ✅ |
-| 13 | DSpace (configuración, auth, comunidades, colecciones, workspace, submission) | ⏳ |
+| 13 | DSpace (configuración, auth, comunidades, colecciones, workspace, submission) | ✅ |
 | 14 | Auditoría (logs, historial, extracción IA, cambios humanos, depósitos) | ⏳ |
 | 15 | Dashboard (estadísticas) | ⏳ |
 | 16 | Tests (unit, integration, API, OCR, AI mock, DSpace mock, e2e) | ⏳ |
@@ -122,6 +122,12 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 - **Aprobación y rechazo**: `POST /api/documents/{id}/approve` **revalida** primero y solo aprueba si no hay errores (`VALIDATION_FAILED` bloquea la aprobación); `POST /api/documents/{id}/reject` marca `REJECTED`. Un documento `APPROVED` no se puede editar ni rechazar.
 - **Permisos RBAC**: editar/rechazar requieren `document.review` (CATALOGADOR, REVISOR); aprobar requiere `document.approve` (REVISOR queda bloqueado con 403).
 
+### Integración con DSpace (FASE 13)
+- **Configuración de repositorios** (`backend/app/repositories/router.py`): CRUD en `/api/admin/repositories` (nombre, código, URL de la API REST, protocolo, usuario y credencial — la credencial se guarda enmascarada; al crear se necesita `admin.repositories.manage`, solo ADMIN). `POST /api/admin/repositories/{id}/collections/sync` autentica contra DSpace, lista comunidades y colecciones (UUID, nombre, handle) y las sincroniza (upsert por `external_id`, inactiva huérfanas sin tipo documental). `PUT /api/admin/repositories/{id}/collections/{c_id}` asocia un tipo documental a una colección.
+- **Conector REST** (`backend/app/dspace/connector.py`): `Dspace9Connector` con el contrato de la API de submission de DSpace 7/8/9 — `authenticate()` (login por formulario → token), `get_communities`, `get_collections`, `get_collection`, `create_workspace_item` (`POST /submission/workspaceitems?parent=`), `add_metadata` (JSON-Patch sobre `/sections/traditionalpageone/dc.*`), `upload_bitstream` (multipart), `get_workspace_item`, `submit_workspace_item` (`POST /workflow/workflowitems` con `text/uri-list`) y `get_item`. El frontend nunca habla con DSpace: todo ocurre desde el backend.
+- **Export SNRD-DC** (`backend/app/snrd/export.py`): `GET /api/documents/{id}/snrd` devuelve el perfil SNRD en Dublin Core (`dc.contributor.author`, `dc.date.issued`, `dc.language.iso`, `dc.identifier.other` = sha256...).
+- **Depósito** (`backend/app/deposit/router.py` + `backend/app/jobs/tasks.py`): `POST /api/documents/{id}/deposit` (202) solo si el documento está `APPROVED` y hay repositorio + colección activa con tipo asociado (si ya fue depositado o no está aprobado responde 409). La tarea `deposit_document` adopta el job `DEPOSIT`: validación final, crea el workspace item, agrega metadata SNRD-DC, sube el PDF, hace submit y registra una `Deposition` `COMPLETED` (item UUID + handle) dejando el documento `DEPOSITED`. Un fallo revierte a `APPROVED` con el error visible para reintentar; un depósito ya completado no se duplica.
+
 ### Frontend de administración
 - `/login`: autenticación.
 - `/admin`: navegación con guard de sesión.
@@ -140,7 +146,7 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
                         ┌──────────────────────────────────────────┐
                         │  api (FastAPI)          :8000            │
                         │  /api/auth /api/users /api/admin/*       │
-                        │  /api/documents /api/review /api/dspace  │
+                        │  /api/documents /api/review /api/admin/repositories /api/deposit │
                         └───────┬──────────────┬─────────────┬─────┘
                                 │              │             │
                           PostgreSQL      Redis       MinIO (PDFs)
@@ -294,14 +300,14 @@ make test                    # dentro del contenedor api (instala editable si fa
 docker compose exec api pytest tests/test_ai_agents.py -q   # un grupo
 ```
 
-Estado actual: **156 tests en verde** (smoke, auth, users, ai_admin, agents, metadata, pdf, ocr, extraction, normalization, validation, review). Los endpoints externos (IA, DSpace) se simulan con `httpx.MockTransport`; el motor OCR se prueba con mocks deterministas y en vivo contra Tesseract real; `scripts/mock_ai_server.py` permite probar la extracción con IA de extremo a extremo.
+Estado actual: **165 tests en verde** (smoke, auth, users, ai_admin, agents, metadata, pdf, ocr, extraction, normalization, validation, review, dspace). Los endpoints externos (IA, DSpace) se simulan con `httpx.MockTransport`; el motor OCR se prueba con mocks deterministas y en vivo contra Tesseract real; `scripts/mock_ai_server.py` permite probar la extracción con IA de extremo a extremo y `scripts/mock_dspace_server.py` el depósito en DSpace REST de extremo a extremo.
 
 ---
 
 ## 13. Roadmap
 
-- **En curso**: FASE 13 — Integración con DSpace (export SNRD, depósito, configuración del repositorio).
-- **Siguientes**: auditoría (14) → dashboard (15) → tests e2e (16) → seguridad (17) → producción (18).
+- **En curso**: FASE 14 — Auditoría (registro de acciones y trazabilidad).
+- **Siguientes**: dashboard (15) → tests e2e (16) → seguridad (17) → producción (18).
 
 ---
 
