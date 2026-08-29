@@ -10,6 +10,7 @@ from app.pdf.router import router as documents_router
 from app.extraction.router import router as extraction_router
 from app.normalization.router import router as normalization_router
 from app.validation.router import router as validation_router
+from app.review.router import router as review_router
 from app.core import storage
 from app.core.config import settings
 from app.core.database import get_db
@@ -41,6 +42,7 @@ def create_app() -> FastAPI:
     app.include_router(extraction_router, prefix="/api")
     app.include_router(normalization_router, prefix="/api")
     app.include_router(validation_router, prefix="/api")
+    app.include_router(review_router, prefix="/api")
 
     @app.get("/health", tags=["core"])
     def health(db: Session = Depends(get_db)) -> dict:
