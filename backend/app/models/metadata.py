@@ -40,6 +40,7 @@ class MetadataField(Base):
     editable: Mapped[bool] = mapped_column(Boolean, default=True)
     ai_extractable: Mapped[bool] = mapped_column(Boolean, default=True)
     validation_type: Mapped[str | None] = mapped_column(String(100))
+    normalization_type: Mapped[str | None] = mapped_column(String(100))
     vocabulary_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("vocabularies.id", ondelete="SET NULL")
     )

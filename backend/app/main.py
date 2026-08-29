@@ -8,6 +8,7 @@ from app.ai.router import router as ai_admin_router
 from app.metadata.router import router as metadata_router
 from app.pdf.router import router as documents_router
 from app.extraction.router import router as extraction_router
+from app.normalization.router import router as normalization_router
 from app.core import storage
 from app.core.config import settings
 from app.core.database import get_db
@@ -37,6 +38,7 @@ def create_app() -> FastAPI:
     app.include_router(metadata_router, prefix="/api")
     app.include_router(documents_router, prefix="/api")
     app.include_router(extraction_router, prefix="/api")
+    app.include_router(normalization_router, prefix="/api")
 
     @app.get("/health", tags=["core"])
     def health(db: Session = Depends(get_db)) -> dict:

@@ -34,8 +34,9 @@ def extract_fields(body):
             break
     if "title" not in fields:
         fields["title"] = {"value": "Tesis sin titulo", "confidence": 0.7, "source_page": 1}
-    fields["creator"] = {"value": "Juan Perez", "confidence": 0.95, "source_page": 1}
-    fields["date"] = {"value": "2023-05-10", "confidence": 0.92}
+    fields["creator"] = {"value": "juan  perez", "confidence": 0.95, "source_page": 1}
+    fields["date"] = {"value": "10/05/2023", "confidence": 0.92}
+    fields["language"] = {"value": "Spanish", "confidence": 0.99, "source_page": 1}
     fields["subject"] = [
         {"value": "Inteligencia artificial en bibliotecas", "confidence": 0.9, "source_page": 1},
         {"value": "Metadatos descriptivos", "confidence": 0.88, "source_page": 1},

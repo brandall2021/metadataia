@@ -140,6 +140,7 @@ def _field_out(field: MetadataField) -> FieldOut:
         editable=field.editable,
         ai_extractable=field.ai_extractable,
         validation_type=field.validation_type,
+        normalization_type=field.normalization_type,
         vocabulary_id=field.vocabulary_id,
         vocabulary_code=field.vocabulary.code if field.vocabulary else None,
         order_index=field.order_index,

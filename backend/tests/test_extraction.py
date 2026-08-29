@@ -488,11 +488,11 @@ def test_extraccion_completa_produce_metadatos(
 
         r = client.get(f"/api/documents/{doc['id']}", headers=catalogador_headers)
         detail = r.json()
-        assert detail["status"] == "METADATA_EXTRACTED"
+        assert detail["status"] == "NORMALIZED"
 
         r = client.get(f"/api/documents/{doc['id']}/metadata", headers=catalogador_headers)
         meta = r.json()
-        assert meta["document_status"] == "METADATA_EXTRACTED"
+        assert meta["document_status"] == "NORMALIZED"
         assert len(meta["records"]) == 2
         title = next(rec for rec in meta["records"] if rec["field"] == "title")
         assert title["value"] == "Impacto de la IA en repositorios"

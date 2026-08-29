@@ -8,8 +8,15 @@ from app.core import storage
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.extraction import engine
+from app.normalization import engine as norm_engine
 from app.jobs.celery_app import celery_app
-from app.models import Document, ExtractionRun, MetadataRecord, ProcessingJob
+from app.models import (
+    Document,
+    ExtractionRun,
+    MetadataRecord,
+    ProcessingJob,
+    VocabularyValue,
+)
 from app.ocr import engine as ocr_engine
 
 
@@ -228,6 +235,8 @@ def extract_metadata(document_id: str) -> dict:
             "raw_object": raw_key,
         }
         db.commit()
+        if settings.auto_normalize and records:
+            normalize_metadata(document_id)
         return {
             "status": "COMPLETED",
             "document_id": document_id,
@@ -260,8 +269,100 @@ def extract_metadata(document_id: str) -> dict:
 
 @shared_task(name="app.jobs.tasks.normalize_metadata")
 def normalize_metadata(document_id: str) -> dict:
-    """Job placeholder: normalizacion de metadatos (FASE 10)."""
-    return {"document_id": document_id, "status": "PENDING"}
+    """Normalizacion de metadatos (FASE 10).
+
+    Convierte los valores extraidos por IA al formato configurado mediante
+    reglas deterministas (vocabularios con sinonimos, fechas ISO, DOI, ORCID,
+    nombres, espacios/mayusculas). Un valor no convertible se deja intacto
+    (normalized=False).
+    """
+    db = SessionLocal()
+    job = None
+    try:
+        doc = db.get(Document, UUID(document_id))
+        if doc is None:
+            return {"status": "ERROR", "document_id": document_id, "error": "documento no encontrado"}
+
+        records = (
+            db.query(MetadataRecord)
+            .filter(MetadataRecord.document_id == doc.id, MetadataRecord.value.isnot(None))
+            .all()
+        )
+        if not records:
+            return {"status": "NOOP", "document_id": document_id, "records": 0}
+
+        job = (
+            db.query(ProcessingJob)
+            .filter(
+                ProcessingJob.document_id == doc.id,
+                ProcessingJob.job_type == "NORMALIZATION",
+                ProcessingJob.status == "PENDING",
+            )
+            .order_by(ProcessingJob.created_at.asc())
+            .first()
+        )
+        if job is None:
+            job = ProcessingJob(document_id=doc.id, job_type="NORMALIZATION", status="PENDING")
+            db.add(job)
+            db.flush()
+        job.status = "RUNNING"
+        job.started_at = datetime.now(timezone.utc)
+        doc.status = "PROCESSING"
+        db.commit()
+
+        vocab_cache: dict = {}
+        changed = 0
+        for rec in records:
+            field = rec.metadata_field
+            if field is None:
+                continue
+            vocab_values = []
+            if field.vocabulary_id:
+                if field.vocabulary_id not in vocab_cache:
+                    vocab_cache[field.vocabulary_id] = (
+                        db.query(VocabularyValue)
+                        .filter(
+                            VocabularyValue.vocabulary_id == field.vocabulary_id,
+                            VocabularyValue.active.is_(True),
+                        )
+                        .all()
+                    )
+                vocab_values = vocab_cache[field.vocabulary_id]
+            result = norm_engine.normalize_record_value(
+                field, rec.value or "", vocab_values=vocab_values
+            )
+            if result.ok and result.value != (rec.value or ""):
+                rec.value = result.value
+                rec.normalized = True
+                changed += 1
+
+        doc.status = "NORMALIZED"
+        job.status = "COMPLETED"
+        job.finished_at = datetime.now(timezone.utc)
+        job.metadata_json = {
+            "records": len(records),
+            "changed": changed,
+            "rule": "deterministic",
+        }
+        db.commit()
+        return {
+            "status": "COMPLETED",
+            "document_id": document_id,
+            "records": len(records),
+            "changed": changed,
+        }
+    except Exception as exc:  # noqa: BLE001 - el error queda registrado
+        db.rollback()
+        if job is not None:
+            job = db.get(ProcessingJob, job.id)
+            if job is not None:
+                job.status = "ERROR"
+                job.finished_at = datetime.now(timezone.utc)
+                job.error_message = str(exc)[:2000]
+            db.commit()
+        return {"status": "ERROR", "document_id": document_id, "error": str(exc)[:1000]}
+    finally:
+        db.close()
 
 
 @shared_task(name="app.jobs.tasks.validate_metadata")

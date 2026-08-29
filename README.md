@@ -12,7 +12,7 @@ Todo se administra desde el panel y se persiste en base de datos — **no se har
 |---|---|
 | Repositorio | https://github.com/brandall2021/metadataia |
 | Documentación | `docs/` (SPECIFICATION, ARCHITECTURE, y por dominio) |
-| Estado | FASE 10 en curso · ✅ F1–F9 completadas |
+| Estado | ✅ F1–F10 completadas · FASE 11 en curso |
 
 ---
 
@@ -53,7 +53,7 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 | 8 | OCR (detección de texto, OCRmyPDF, Tesseract, extracción por página) | ✅ |
 | 9 | Extracción de metadatos con IA (extracción de campos, OCR + IA) | ✅ |
 | 9 | IA (selección de agente, prompt, JSON Schema, extracción, confidence, evidencia) | ⏳ |
-| 10 | Normalización (vocabularios, fechas, idioma, tipos, derechos, identificadores) | ⏳ |
+| 10 | Normalización (vocabularios, fechas, idioma, tipos, derechos, identificadores) | ✅ |
 | 11 | Validación (reglas, errores, warnings, SNRD) | ⏳ |
 | 12 | Revisión humana (visor, formulario dinámico, edición, evidencia, aprobación) | ⏳ |
 | 13 | DSpace (configuración, auth, comunidades, colecciones, workspace, submission) | ⏳ |
@@ -104,6 +104,12 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 - Nuevos endpoints: `POST /api/documents/{id}/extract` (202, encola) y `GET /api/documents/{id}/metadata` (runs + registros); `ExtractionRun` guarda tokens, tiempos, hash del prompt y la **respuesta cruda** (`raw/{run_id}.json` en MinIO) para auditoría.
 - **Auto-encolado**: `AUTO_AI=true` encola extracción automáticamente al subir un documento con texto (`POST /api/documents` acepta `document_type_id` como form) o tras el OCR.
 - La tarea **adopta el job `PENDING`** creado por el encolador (un único job por extracción).
+
+### Normalización de metadatos (FASE 10)
+- **Reglas deterministas, independientes del LLM**: los valores extraídos por IA se convierten al formato configurado con `MetadataNormalizer` (`backend/app/normalization/engine.py`): vocabularios con sinónimos (p. ej. `Spanish`/`Castellano` → `spa`), fechas a ISO (`10/05/2023` → `2023-05-10`, `10 de mayo de 2023`, `May 10, 2023`, `2023-05`, `2023`), DOI (`10.xxxx/yyyy`), ORCID (`0000-0000-0000-0000`), nombres (`APELLIDO, Nombre`), espacios y mayúsculas.
+- **Configuración por campo**: `normalization_type` en `MetadataField` (columna nueva con migración) o inferido del `data_type`/elemento (`date`, `identifier`, `creator`, `language`...); un `vocabulary_id` hace que el valor se mapee a `code` canónico.
+- **Pipeline**: `POST /api/documents/{id}/normalize` (202, encola job `NORMALIZATION`); la tarea **adopta el job `PENDING`**, deja intacto todo valor no convertible (`normalized=False`) y marca el documento como `NORMALIZED`.
+- **Auto-normalización**: `AUTO_NORMALIZE=true` (por defecto) encadena `normalize_metadata` al final de `extract_metadata`, por lo que subir + cargar genera `UPLOADED → … → METADATA_EXTRACTED → NORMALIZED`.
 
 ### Frontend de administración
 - `/login`: autenticación.
@@ -277,14 +283,14 @@ make test                    # dentro del contenedor api (instala editable si fa
 docker compose exec api pytest tests/test_ai_agents.py -q   # un grupo
 ```
 
-Estado actual: **116 tests en verde** (smoke, auth, users, ai_admin, agents, metadata, pdf, ocr, extraction). Los endpoints externos (IA, DSpace) se simulan con `httpx.MockTransport`; el motor OCR se prueba con mocks deterministas y en vivo contra Tesseract real; `scripts/mock_ai_server.py` permite probar la extracción con IA de extremo a extremo.
+Estado actual: **131 tests en verde** (smoke, auth, users, ai_admin, agents, metadata, pdf, ocr, extraction, normalization). Los endpoints externos (IA, DSpace) se simulan con `httpx.MockTransport`; el motor OCR se prueba con mocks deterministas y en vivo contra Tesseract real; `scripts/mock_ai_server.py` permite probar la extracción con IA de extremo a extremo.
 
 ---
 
 ## 13. Roadmap
 
-- **En curso**: FASE 10 — Normalización (vocabularios, fechas, idioma, tipos, derechos, identificadores).
-- **Siguientes**: validación SNRD (11) → revisión humana (12) → DSpace (13) → auditoría (14) → dashboard (15) → tests e2e (16) → seguridad (17) → producción (18).
+- **En curso**: FASE 11 — Validación (reglas, errores, warnings, SNRD).
+- **Siguientes**: revisión humana (12) → DSpace (13) → auditoría (14) → dashboard (15) → tests e2e (16) → seguridad (17) → producción (18).
 
 ---
 

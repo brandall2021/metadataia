@@ -53,6 +53,7 @@ class FieldCreate(BaseModel):
     editable: bool = True
     ai_extractable: bool = True
     validation_type: str | None = Field(default=None, max_length=100)
+    normalization_type: str | None = Field(default=None, max_length=100)
     vocabulary_id: uuid.UUID | None = None
     order_index: int | None = None
     active: bool = True
@@ -74,6 +75,7 @@ class FieldUpdate(BaseModel):
     editable: bool | None = None
     ai_extractable: bool | None = None
     validation_type: str | None = Field(default=None, max_length=100)
+    normalization_type: str | None = Field(default=None, max_length=100)
     vocabulary_id: uuid.UUID | None = None
     order_index: int | None = None
     active: bool | None = None
@@ -94,6 +96,7 @@ class FieldOut(BaseModel):
     editable: bool
     ai_extractable: bool
     validation_type: str | None
+    normalization_type: str | None
     vocabulary_id: uuid.UUID | None
     vocabulary_code: str | None
     order_index: int | None
