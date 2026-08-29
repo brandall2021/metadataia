@@ -15,9 +15,12 @@ from app.models import (
     ExtractionRun,
     MetadataRecord,
     ProcessingJob,
+    ValidationResult,
     VocabularyValue,
 )
 from app.ocr import engine as ocr_engine
+from app.snrd.validator import validate_snrd
+from app.validation import engine as validation_engine
 
 
 @shared_task(name="app.jobs.tasks.analyze_document")
@@ -237,6 +240,8 @@ def extract_metadata(document_id: str) -> dict:
         db.commit()
         if settings.auto_normalize and records:
             normalize_metadata(document_id)
+        if settings.auto_validate and records:
+            validate_metadata(document_id)
         return {
             "status": "COMPLETED",
             "document_id": document_id,
@@ -367,8 +372,119 @@ def normalize_metadata(document_id: str) -> dict:
 
 @shared_task(name="app.jobs.tasks.validate_metadata")
 def validate_metadata(document_id: str) -> dict:
-    """Job placeholder: validacion de metadatos (FASE 11)."""
-    return {"document_id": document_id, "status": "PENDING"}
+    """Validacion de metadatos (FASE 11).
+
+    Ejecuta las reglas por campo (obligatorios, formatos, vocabularios) y
+    la verificacion SNRD sobre los registros del documento, registrando un
+    ValidationResult por validador. El documento pasa a VALIDATED si no hay
+    errores, o VALIDATION_FAILED si los hay.
+    """
+    db = SessionLocal()
+    job = None
+    try:
+        doc = db.get(Document, UUID(document_id))
+        if doc is None:
+            return {"status": "ERROR", "document_id": document_id, "error": "documento no encontrado"}
+
+        records = (
+            db.query(MetadataRecord)
+            .filter(MetadataRecord.document_id == doc.id, MetadataRecord.value.isnot(None))
+            .all()
+        )
+        if not records:
+            return {"status": "NOOP", "document_id": document_id, "records": 0}
+
+        job = (
+            db.query(ProcessingJob)
+            .filter(
+                ProcessingJob.document_id == doc.id,
+                ProcessingJob.job_type == "VALIDATION",
+                ProcessingJob.status == "PENDING",
+            )
+            .order_by(ProcessingJob.created_at.asc())
+            .first()
+        )
+        if job is None:
+            job = ProcessingJob(document_id=doc.id, job_type="VALIDATION", status="PENDING")
+            db.add(job)
+            db.flush()
+        job.status = "RUNNING"
+        job.started_at = datetime.now(timezone.utc)
+        doc.status = "PROCESSING"
+        db.commit()
+
+        vocab_cache: dict = {}
+        for rec in records:
+            field = rec.metadata_field
+            if field is not None and field.vocabulary_id and field.vocabulary_id not in vocab_cache:
+                vocab_cache[field.vocabulary_id] = (
+                    db.query(VocabularyValue)
+                    .filter(
+                        VocabularyValue.vocabulary_id == field.vocabulary_id,
+                        VocabularyValue.active.is_(True),
+                    )
+                    .all()
+                )
+
+        outcome = validation_engine.validate_records(records, vocab_cache)
+        type_fields = []
+        if doc.document_type is not None:
+            type_fields = [
+                link.metadata_field
+                for link in doc.document_type.metadata_field_links
+                if link.metadata_field is not None and link.metadata_field.active
+            ]
+        outcome.errors = validation_engine.missing_required(type_fields, records) + outcome.errors
+        snrd_errors, snrd_warnings = validate_snrd(
+            records, doc_type_label=doc.document_type.code if doc.document_type else None
+        )
+        errors = outcome.errors + snrd_errors
+        warnings = outcome.warnings + snrd_warnings
+
+        meta_result = ValidationResult(
+            document_id=doc.id,
+            validator_type="METADATA",
+            status="COMPLETED" if not outcome.errors else "FAILED",
+            errors_json=outcome.errors,
+            warnings_json=outcome.warnings,
+        )
+        snrd_result = ValidationResult(
+            document_id=doc.id,
+            validator_type="SNRD",
+            status="COMPLETED" if not snrd_errors else "FAILED",
+            errors_json=snrd_errors,
+            warnings_json=snrd_warnings,
+        )
+        db.add_all([meta_result, snrd_result])
+
+        doc.status = "VALIDATED" if not errors else "VALIDATION_FAILED"
+        job.status = "COMPLETED"
+        job.finished_at = datetime.now(timezone.utc)
+        job.metadata_json = {
+            "errors": len(errors),
+            "warnings": len(warnings),
+            "valid": not errors,
+        }
+        db.commit()
+        return {
+            "status": "COMPLETED",
+            "document_id": document_id,
+            "errors": len(errors),
+            "warnings": len(warnings),
+            "valid": not errors,
+        }
+    except Exception as exc:  # noqa: BLE001 - el error queda registrado
+        db.rollback()
+        if job is not None:
+            job = db.get(ProcessingJob, job.id)
+            if job is not None:
+                job.status = "ERROR"
+                job.finished_at = datetime.now(timezone.utc)
+                job.error_message = str(exc)[:2000]
+            db.commit()
+        return {"status": "ERROR", "document_id": document_id, "error": str(exc)[:1000]}
+    finally:
+        db.close()
 
 
 @shared_task(name="app.jobs.tasks.deposit_dspace")

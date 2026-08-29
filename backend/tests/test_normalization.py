@@ -494,9 +494,10 @@ def test_extraccion_encadena_normalizacion_automatica(
         assert by_field["creator"]["value"] == "Juan Perez"
         assert by_field["date"]["value"] == "2023-05-10"
         assert by_field["language"]["value"] == "spa"
+        # El FAKE no devuelve title -> SNRD lo marca como faltante
         assert client.get(
             f"/api/documents/{doc['id']}", headers=catalogador_headers
-        ).json()["status"] == "NORMALIZED"
+        ).json()["status"] == "VALIDATION_FAILED"
     finally:
         _cleanup_doc(doc["id"], catalogador_headers, client)
 

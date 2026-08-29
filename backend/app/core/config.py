@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     auto_ocr: bool = True
     auto_ai: bool = True
     auto_normalize: bool = True
+    auto_validate: bool = True
     default_metadata_schema: str = "snrd-dc"
     institution: str = ""
     repository: str = ""

@@ -12,7 +12,7 @@ Todo se administra desde el panel y se persiste en base de datos — **no se har
 |---|---|
 | Repositorio | https://github.com/brandall2021/metadataia |
 | Documentación | `docs/` (SPECIFICATION, ARCHITECTURE, y por dominio) |
-| Estado | ✅ F1–F10 completadas · FASE 11 en curso |
+| Estado | ✅ F1–F11 completadas · FASE 12 en curso |
 
 ---
 
@@ -54,7 +54,7 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 | 9 | Extracción de metadatos con IA (extracción de campos, OCR + IA) | ✅ |
 | 9 | IA (selección de agente, prompt, JSON Schema, extracción, confidence, evidencia) | ⏳ |
 | 10 | Normalización (vocabularios, fechas, idioma, tipos, derechos, identificadores) | ✅ |
-| 11 | Validación (reglas, errores, warnings, SNRD) | ⏳ |
+| 11 | Validación (reglas, errores, warnings, SNRD) | ✅ |
 | 12 | Revisión humana (visor, formulario dinámico, edición, evidencia, aprobación) | ⏳ |
 | 13 | DSpace (configuración, auth, comunidades, colecciones, workspace, submission) | ⏳ |
 | 14 | Auditoría (logs, historial, extracción IA, cambios humanos, depósitos) | ⏳ |
@@ -110,6 +110,12 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 - **Configuración por campo**: `normalization_type` en `MetadataField` (columna nueva con migración) o inferido del `data_type`/elemento (`date`, `identifier`, `creator`, `language`...); un `vocabulary_id` hace que el valor se mapee a `code` canónico.
 - **Pipeline**: `POST /api/documents/{id}/normalize` (202, encola job `NORMALIZATION`); la tarea **adopta el job `PENDING`**, deja intacto todo valor no convertible (`normalized=False`) y marca el documento como `NORMALIZED`.
 - **Auto-normalización**: `AUTO_NORMALIZE=true` (por defecto) encadena `normalize_metadata` al final de `extract_metadata`, por lo que subir + cargar genera `UPLOADED → … → METADATA_EXTRACTED → NORMALIZED`.
+
+### Validación de metadatos (FASE 11)
+- **Motor determinista** (`backend/app/validation/engine.py`): reglas por campo según `MetadataField` — obligatorios (incluye campos obligatorios del tipo documental **sin registro extraído**), formatos (`email`, `url`, `date`/ISO, `integer`, `float`, `doi`, `orcid`, `isbn`, `issn`, `identifier`, `regex:patrón`), longitudes (`min_length:N`, `max_length:N`) y vocabularios; genera **errores** (registros inválidos) y **warnings** (p. ej. confianza baja < 0.6).
+- **Validador SNRD** (`backend/app/snrd/validator.py`), módulo aparte de DSpace: verifica el perfil de interoperabilidad (elementos obligatorios `title`/`date`, fechas ISO, idioma recomendado).
+- **Pipeline**: `POST /api/documents/{id}/validate` (202, encola job `VALIDATION`); la tarea adopta el job `PENDING`, registra un `ValidationResult` por validador (`METADATA`, `SNRD`) con `errors_json`/`warnings_json` y deja el documento en `VALIDATED` (sin errores) o `VALIDATION_FAILED`. `GET /api/documents/{id}/validation` muestra los resultados.
+- **Auto-validación**: `AUTO_VALIDATE=true` (por defecto) encadena `validate_metadata` tras normalizar; flujo completo `UPLOADED → … → NORMALIZED → VALIDATED`.
 
 ### Frontend de administración
 - `/login`: autenticación.
@@ -283,14 +289,14 @@ make test                    # dentro del contenedor api (instala editable si fa
 docker compose exec api pytest tests/test_ai_agents.py -q   # un grupo
 ```
 
-Estado actual: **131 tests en verde** (smoke, auth, users, ai_admin, agents, metadata, pdf, ocr, extraction, normalization). Los endpoints externos (IA, DSpace) se simulan con `httpx.MockTransport`; el motor OCR se prueba con mocks deterministas y en vivo contra Tesseract real; `scripts/mock_ai_server.py` permite probar la extracción con IA de extremo a extremo.
+Estado actual: **145 tests en verde** (smoke, auth, users, ai_admin, agents, metadata, pdf, ocr, extraction, normalization, validation). Los endpoints externos (IA, DSpace) se simulan con `httpx.MockTransport`; el motor OCR se prueba con mocks deterministas y en vivo contra Tesseract real; `scripts/mock_ai_server.py` permite probar la extracción con IA de extremo a extremo.
 
 ---
 
 ## 13. Roadmap
 
-- **En curso**: FASE 11 — Validación (reglas, errores, warnings, SNRD).
-- **Siguientes**: revisión humana (12) → DSpace (13) → auditoría (14) → dashboard (15) → tests e2e (16) → seguridad (17) → producción (18).
+- **En curso**: FASE 12 — Revisión humana (visor, formulario dinámico, edición, evidencia, aprobación).
+- **Siguientes**: DSpace (13) → auditoría (14) → dashboard (15) → tests e2e (16) → seguridad (17) → producción (18).
 
 ---
 

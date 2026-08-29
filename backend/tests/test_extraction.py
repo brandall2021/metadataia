@@ -488,11 +488,12 @@ def test_extraccion_completa_produce_metadatos(
 
         r = client.get(f"/api/documents/{doc['id']}", headers=catalogador_headers)
         detail = r.json()
-        assert detail["status"] == "NORMALIZED"
+        # El esquema del test solo tiene title/creator: SNRD marca falta de date
+        assert detail["status"] == "VALIDATION_FAILED"
 
         r = client.get(f"/api/documents/{doc['id']}/metadata", headers=catalogador_headers)
         meta = r.json()
-        assert meta["document_status"] == "NORMALIZED"
+        assert meta["document_status"] == "VALIDATION_FAILED"
         assert len(meta["records"]) == 2
         title = next(rec for rec in meta["records"] if rec["field"] == "title")
         assert title["value"] == "Impacto de la IA en repositorios"
