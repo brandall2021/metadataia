@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -6,8 +7,10 @@ from celery import shared_task
 from app.core import storage
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.models import Document, ProcessingJob
-from app.ocr import engine
+from app.extraction import engine
+from app.jobs.celery_app import celery_app
+from app.models import Document, ExtractionRun, MetadataRecord, ProcessingJob
+from app.ocr import engine as ocr_engine
 
 
 @shared_task(name="app.jobs.tasks.analyze_document")
@@ -30,19 +33,32 @@ def run_ocr(document_id: str, languages: str | None = None) -> dict:
         if doc is None:
             return {"status": "ERROR", "error": "documento no encontrado"}
 
-        job = ProcessingJob(document_id=doc.id, job_type="OCR", status="RUNNING")
+        job = (
+            db.query(ProcessingJob)
+            .filter(
+                ProcessingJob.document_id == doc.id,
+                ProcessingJob.job_type == "OCR",
+                ProcessingJob.status == "PENDING",
+            )
+            .order_by(ProcessingJob.created_at.asc())
+            .first()
+        )
+        if job is None:
+            job = ProcessingJob(document_id=doc.id, job_type="OCR", status="PENDING")
+            db.add(job)
+            db.flush()
+        job.status = "RUNNING"
         job.started_at = datetime.now(timezone.utc)
-        db.add(job)
         doc.status = "PROCESSING"
         db.commit()
         db.refresh(job)
 
         original = storage.download_original(doc.storage_path)
         langs = languages or settings.ocr_languages
-        result = engine.perform_ocr(original, langs)
+        result = ocr_engine.perform_ocr(original, langs)
         searchable_pdf = result["pdf"]
         ocr_key = storage.upload_searchable(doc.sha256 or "", searchable_pdf)
-        texts = engine.extract_text_pdf(searchable_pdf)
+        texts = ocr_engine.extract_text_pdf(searchable_pdf)
 
         pages = sorted(doc.pages, key=lambda p: p.page_number)
         for i, page in enumerate(pages, start=1):
@@ -60,6 +76,8 @@ def run_ocr(document_id: str, languages: str | None = None) -> dict:
             "output_object": ocr_key,
         }
         db.commit()
+        if settings.auto_ai:
+            celery_app.send_task("app.jobs.tasks.extract_metadata", args=[str(doc.id)])
         return {
             "status": "COMPLETED",
             "document_id": document_id,
@@ -89,8 +107,155 @@ def extract_text(document_id: str) -> dict:
 
 @shared_task(name="app.jobs.tasks.extract_metadata")
 def extract_metadata(document_id: str) -> dict:
-    """Job placeholder: extraccion de metadatos con IA (FASE 9)."""
-    return {"document_id": document_id, "status": "PENDING"}
+    """Extraccion de metadatos con IA (FASE 9).
+
+    Documento con texto (o con OCR aplicado) -> agente automatico ->
+    prompt con el esquema de metadatos -> modelo -> JSON validado ->
+    MetadataRecord por campo (value + confidence + evidencia de pagina).
+    """
+    db = SessionLocal()
+    job = None
+    run = None
+    try:
+        doc = db.get(Document, UUID(document_id))
+        if doc is None:
+            return {"status": "ERROR", "document_id": document_id, "error": "documento no encontrado"}
+
+        doc_type = doc.document_type
+        agent = engine.select_agent(doc_type, db)
+        if agent is None or agent.current_version is None:
+            return {"status": "ERROR", "document_id": document_id,
+                    "error": "no hay un agente de IA activo con version para este documento"}
+        version = agent.current_version
+        model = version.model
+        provider = model.provider
+
+        text = engine.document_text(doc)
+        if not text.strip():
+            raise engine.NoTextError("el documento no tiene texto; ejecute OCR primero")
+
+        field_defs = engine.build_field_defs(doc_type, db)
+        context = engine.build_context(doc, doc_type, field_defs)
+        system, user = engine.build_prompt(version, context)
+
+        run = ExtractionRun(
+            document_id=doc.id,
+            agent_id=agent.id,
+            agent_version_id=version.id,
+            model_id=model.id,
+            prompt_hash=engine.prompt_hash(system, user),
+            started_at=datetime.now(timezone.utc),
+            status="RUNNING",
+        )
+        db.add(run)
+        job = (
+            db.query(ProcessingJob)
+            .filter(
+                ProcessingJob.document_id == doc.id,
+                ProcessingJob.job_type == "EXTRACTION",
+                ProcessingJob.status == "PENDING",
+            )
+            .order_by(ProcessingJob.created_at.asc())
+            .first()
+        )
+        if job is None:
+            job = ProcessingJob(document_id=doc.id, job_type="EXTRACTION", status="PENDING")
+            db.add(job)
+            db.flush()
+        job.status = "RUNNING"
+        job.started_at = datetime.now(timezone.utc)
+        doc.status = "PROCESSING"
+        db.commit()
+        db.refresh(run)
+
+        call = engine.call_model(
+            provider,
+            model.model_identifier,
+            system,
+            user,
+            temperature=version.temperature,
+            max_tokens=version.max_tokens,
+            supports_json=model.supports_json,
+        )
+        data = engine.parse_content(call["content"])
+        payload = data.get("fields", data) if isinstance(data, dict) else data
+        schema_errors = engine.validate_schema(payload, version.output_schema_json or {})
+        if schema_errors:
+            raise engine.ExtractionError("salida no valida: " + "; ".join(schema_errors))
+        records = engine.parse_fields(data, field_defs)
+
+        raw_key = storage.upload_object(
+            f"raw/{run.id}.json",
+            json.dumps(
+                {"prompt_hash": run.prompt_hash, "response": data, "call": call},
+                ensure_ascii=False,
+            ).encode("utf-8"),
+            "application/json",
+        )
+
+        for rec in records:
+            db.add(
+                MetadataRecord(
+                    document_id=doc.id,
+                    metadata_field_id=UUID(rec["metadata_field_id"]),
+                    value=rec["value"],
+                    language=context["language"],
+                    confidence=rec["confidence"],
+                    source="IA",
+                    source_page=rec["source_page"],
+                    source_text=rec["source_text"],
+                    extraction_run_id=run.id,
+                )
+            )
+
+        doc.status = "METADATA_EXTRACTED"
+        run.status = "COMPLETED"
+        run.finished_at = datetime.now(timezone.utc)
+        run.raw_response_storage_path = raw_key
+        run.input_tokens = call["input_tokens"]
+        run.output_tokens = call["output_tokens"]
+        job.status = "COMPLETED"
+        job.finished_at = datetime.now(timezone.utc)
+        job.metadata_json = {
+            "run_id": str(run.id),
+            "agent_code": agent.code,
+            "model": model.model_identifier,
+            "provider": provider.code,
+            "records": len(records),
+            "time_ms": call["time_ms"],
+            "input_tokens": call["input_tokens"],
+            "output_tokens": call["output_tokens"],
+            "raw_object": raw_key,
+        }
+        db.commit()
+        return {
+            "status": "COMPLETED",
+            "document_id": document_id,
+            "records": len(records),
+            "agent": agent.code,
+            "model": model.model_identifier,
+        }
+    except Exception as exc:  # noqa: BLE001 - el error queda registrado
+        db.rollback()
+        doc = db.get(Document, UUID(document_id))
+        if doc is not None and doc.status == "PROCESSING":
+            doc.status = "UPLOADED"
+        if run is not None:
+            run = db.get(ExtractionRun, run.id)
+            if run is not None:
+                run.status = "ERROR"
+                run.finished_at = datetime.now(timezone.utc)
+                run.error_message = str(exc)[:2000]
+        if job is not None:
+            job = db.get(ProcessingJob, job.id)
+            if job is not None:
+                job.status = "ERROR"
+                job.finished_at = datetime.now(timezone.utc)
+                job.error_message = str(exc)[:2000]
+        db.commit()
+        return {"status": "ERROR", "document_id": document_id, "error": str(exc)[:1000]}
+    finally:
+        db.close()
 
 
 @shared_task(name="app.jobs.tasks.normalize_metadata")

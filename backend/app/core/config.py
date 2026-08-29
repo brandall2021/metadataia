@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     dspace_timeout_seconds: int = 120
     auto_ocr: bool = True
     auto_ai: bool = True
+    default_metadata_schema: str = "snrd-dc"
+    institution: str = ""
+    repository: str = ""
 
     # --- CORS ------------------------------------------------------------------
     cors_origins: str = "http://localhost:3000"

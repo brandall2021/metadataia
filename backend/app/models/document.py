@@ -40,16 +40,16 @@ class Document(Base):
         back_populates="document", passive_deletes=True
     )
     extraction_runs: Mapped[list["ExtractionRun"]] = relationship(
-        back_populates="document", passive_deletes=True
+        back_populates="document", cascade="all, delete-orphan", passive_deletes=True
     )
     metadata_records: Mapped[list["MetadataRecord"]] = relationship(
-        back_populates="document", passive_deletes=True
+        back_populates="document", cascade="all, delete-orphan", passive_deletes=True
     )
     validation_results: Mapped[list["ValidationResult"]] = relationship(
-        back_populates="document", passive_deletes=True
+        back_populates="document", cascade="all, delete-orphan", passive_deletes=True
     )
     depositions: Mapped[list["Deposition"]] = relationship(
-        back_populates="document", passive_deletes=True
+        back_populates="document", cascade="all, delete-orphan", passive_deletes=True
     )
     document_type: Mapped["DocumentType | None"] = relationship()  # noqa: F821
 

@@ -8,7 +8,7 @@ El archivo original nunca se modifica.
 import io
 import uuid
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -92,7 +92,7 @@ def _enqueue_ocr(db: Session, doc: Document) -> ProcessingJob:
 @router.post("", response_model=DocumentDetailOut, status_code=201)
 def upload_document(
     file: UploadFile = File(...),
-    document_type_id: str | None = None,
+    document_type_id: str | None = Form(None),
     db: Session = Depends(get_db),
     user: User = Depends(can_upload),
 ):
@@ -165,6 +165,10 @@ def upload_document(
     db.refresh(doc)
     if doc.needs_ocr and settings.auto_ocr:
         _enqueue_ocr(db, doc)
+    elif settings.auto_ai and not doc.needs_ocr:
+        from app.extraction.router import _enqueue_extraction
+
+        _enqueue_extraction(db, doc)
     return _doc_detail_out(doc)
 
 
@@ -231,5 +235,8 @@ def delete_document(document_id: str, db: Session = Depends(get_db), _: User = D
     storage.delete_original(doc.storage_path)
     if doc.sha256 and storage.object_exists(f"ocr/{doc.sha256}.pdf"):
         storage.delete_object(f"ocr/{doc.sha256}.pdf")
+    for run in doc.extraction_runs:
+        if run.raw_response_storage_path and storage.object_exists(run.raw_response_storage_path):
+            storage.delete_object(run.raw_response_storage_path)
     db.delete(doc)
     db.commit()

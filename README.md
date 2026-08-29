@@ -12,7 +12,7 @@ Todo se administra desde el panel y se persiste en base de datos — **no se har
 |---|---|
 | Repositorio | https://github.com/brandall2021/metadataia |
 | Documentación | `docs/` (SPECIFICATION, ARCHITECTURE, y por dominio) |
-| Estado | FASE 9 en curso · ✅ F1–F8 completadas |
+| Estado | FASE 10 en curso · ✅ F1–F9 completadas |
 
 ---
 
@@ -51,7 +51,7 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 | 6 | Metadatos (esquemas, campos, vocabularios, tipos documentales) | ✅ |
 | 7 | PDF (upload, SHA256, análisis, almacenamiento) | ✅ |
 | 8 | OCR (detección de texto, OCRmyPDF, Tesseract, extracción por página) | ✅ |
-| 9 | Extracción de metadatos con IA (extracción de campos, OCR + IA) | 🔨 En curso |
+| 9 | Extracción de metadatos con IA (extracción de campos, OCR + IA) | ✅ |
 | 9 | IA (selección de agente, prompt, JSON Schema, extracción, confidence, evidencia) | ⏳ |
 | 10 | Normalización (vocabularios, fechas, idioma, tipos, derechos, identificadores) | ⏳ |
 | 11 | Validación (reglas, errores, warnings, SNRD) | ⏳ |
@@ -97,6 +97,13 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 - **Registro completo** por job (`ProcessingJob`): herramienta, versión, idiomas, tiempo de ejecución, páginas procesadas y errores (`metadata_json`), con estados `PENDING → RUNNING → COMPLETED|ERROR`.
 - Extracción del texto **página por página** del PDF buscable, actualizando `document_pages.text`, `text_length` y `ocr_used`; el documento pasa a estado `OCR_COMPLETED`.
 - Detalle del documento incluye el histórico de jobs (`/api/documents/{id}`).
+
+### Extracción de metadatos con IA (FASE 9)
+- **Selección automática de agente**: agente por defecto del tipo documental → agente específico del tipo → agente genérico activo (`AIAgent.active` + `current_version`).
+- **Pipeline Celery**: `extract_metadata` construye el prompt (system + instrucciones con variables de contexto) a partir del texto por página, llama al modelo (**OpenAI-compatible** o **Anthropic**, `response_format` JSON si el modelo lo soporta), **valida la salida contra el JSON Schema** del agente y mapea cada campo a `MetadataRecord` con `value`, `confidence` y **evidencia** (`source_page`, `source_text`).
+- Nuevos endpoints: `POST /api/documents/{id}/extract` (202, encola) y `GET /api/documents/{id}/metadata` (runs + registros); `ExtractionRun` guarda tokens, tiempos, hash del prompt y la **respuesta cruda** (`raw/{run_id}.json` en MinIO) para auditoría.
+- **Auto-encolado**: `AUTO_AI=true` encola extracción automáticamente al subir un documento con texto (`POST /api/documents` acepta `document_type_id` como form) o tras el OCR.
+- La tarea **adopta el job `PENDING`** creado por el encolador (un único job por extracción).
 
 ### Frontend de administración
 - `/login`: autenticación.
@@ -145,11 +152,12 @@ Diagrama y decisiones: [`ARCHITECTURE.md`](ARCHITECTURE.md).
 │   ├── app/
 │   │   ├── auth/            # login, JWT, refresh, me
 │   │   ├── users/           # usuarios, roles, permisos (admin)
-│   │   ├── ai/              # proveedores, modelos, agentes (admin) + propagación IA (F9)
-│   │   ├── metadata/        # esquemas, campos, vocabularios, tipos documentales (admin)
-│   │   ├── pdf/             # motor PDF: upload, análisis, dedup, descarga (F7)
-│   │   ├── ocr/             # motor OCR: OCRmyPDF+Tesseract, extracción por página (F8)
-│   │   ├── jobs/            # Celery (celery_app + tareas: run_ocr y placeholders)
+│   │   ├── ai/               # proveedores, modelos, agentes (admin) + propagación IA (F9)
+│   │   ├── metadata/         # esquemas, campos, vocabularios, tipos documentales (admin)
+│   │   ├── pdf/              # motor PDF: upload, análisis, dedup, descarga (F7)
+│   │   ├── ocr/              # motor OCR: OCRmyPDF+Tesseract, extracción por página (F8)
+│   │   ├── extraction/       # extracción IA: selección de agente, prompt, validación, records (F9)
+│   │   ├── jobs/             # Celery (celery_app + tareas: run_ocr, extract_metadata)
 │   │   ├── core/            # security (bcrypt/JWT/Fernet), dependencies (RBAC), config, storage (S3/filesystem)
 │   │   ├── models/          # SQLAlchemy (migrados con Alembic)
 │   │   ├── seed.py          # datos iniciales idempotentes
@@ -163,7 +171,7 @@ Diagrama y decisiones: [`ARCHITECTURE.md`](ARCHITECTURE.md).
 │   ├── components/ui/       # shadcn/ui
 │   └── lib/api.ts           # cliente REST con token
 ├── docs/                    # SPECIFICATION y documentación por dominio
-├── scripts/                 # utilidades (patch-firewall.sh)
+├── scripts/                 # utilidades (patch-firewall.sh, mock_ai_server.py)
 ├── Makefile                 # atajos de desarrollo
 ├── docker-compose.yml
 └── .env.example
@@ -186,7 +194,7 @@ cp .env.example .env          # ajustar credenciales (claves JWT/secret ≥ 32 c
 make dev-up                   # construye y levanta todos los servicios
 make migrate                  # aplica migraciones (alembic upgrade head)
 make seed                     # carga datos iniciales (usuarios/roles/permisos)
-make test                     # 103 tests del backend
+make test                     # 116 tests del backend
 ```
 
 | Servicio | URL |
@@ -269,14 +277,14 @@ make test                    # dentro del contenedor api (instala editable si fa
 docker compose exec api pytest tests/test_ai_agents.py -q   # un grupo
 ```
 
-Estado actual: **103 tests en verde** (smoke, auth, users, ai_admin, agents, metadata, pdf, ocr). Los endpoints externos (IA, DSpace) se simulan con `httpx.MockTransport`; el motor OCR se prueba con mocks deterministas y en vivo contra Tesseract real.
+Estado actual: **116 tests en verde** (smoke, auth, users, ai_admin, agents, metadata, pdf, ocr, extraction). Los endpoints externos (IA, DSpace) se simulan con `httpx.MockTransport`; el motor OCR se prueba con mocks deterministas y en vivo contra Tesseract real; `scripts/mock_ai_server.py` permite probar la extracción con IA de extremo a extremo.
 
 ---
 
 ## 13. Roadmap
 
-- **En curso**: FASE 9 — Extracción de metadatos con IA (campos del esquema, OCR + IA).
-- **Siguientes**: normalización (10) → validación SNRD (11) → revisión humana (12) → DSpace (13) → auditoría (14) → dashboard (15) → tests e2e (16) → seguridad (17) → producción (18).
+- **En curso**: FASE 10 — Normalización (vocabularios, fechas, idioma, tipos, derechos, identificadores).
+- **Siguientes**: validación SNRD (11) → revisión humana (12) → DSpace (13) → auditoría (14) → dashboard (15) → tests e2e (16) → seguridad (17) → producción (18).
 
 ---
 
