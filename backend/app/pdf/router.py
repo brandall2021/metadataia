@@ -8,10 +8,11 @@ El archivo original nunca se modifica.
 import io
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.audit.service import audit_log, request_context
 from app.core import storage
 from app.core.config import settings
 from app.core.database import get_db
@@ -91,6 +92,7 @@ def _enqueue_ocr(db: Session, doc: Document) -> ProcessingJob:
 
 @router.post("", response_model=DocumentDetailOut, status_code=201)
 def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     document_type_id: str | None = Form(None),
     db: Session = Depends(get_db),
@@ -163,6 +165,22 @@ def upload_document(
         )
     db.commit()
     db.refresh(doc)
+    audit_log(
+        db,
+        user=user,
+        action="document.upload",
+        entity_type="document",
+        entity_id=str(doc.id),
+        new_value={
+            "filename": filename,
+            "sha256": sha256,
+            "file_size": len(data),
+            "needs_ocr": doc.needs_ocr,
+            "document_type_id": str(doc.document_type_id) if doc.document_type_id else None,
+        },
+        **request_context(request),
+    )
+    db.commit()
     if doc.needs_ocr and settings.auto_ocr:
         _enqueue_ocr(db, doc)
     elif settings.auto_ai and not doc.needs_ocr:
@@ -187,7 +205,7 @@ def get_document(document_id: str, db: Session = Depends(get_db), _: User = Depe
 
 
 @router.post("/{document_id}/ocr", status_code=202)
-def request_ocr(document_id: str, db: Session = Depends(get_db), _: User = Depends(can_upload)):
+def request_ocr(document_id: str, request: Request, db: Session = Depends(get_db), _: User = Depends(can_upload)):
     try:
         doc_uuid = uuid.UUID(document_id)
     except ValueError:
@@ -198,6 +216,16 @@ def request_ocr(document_id: str, db: Session = Depends(get_db), _: User = Depen
     if not doc.needs_ocr:
         raise HTTPException(status_code=409, detail="El documento tiene texto; no requiere OCR")
     job = _enqueue_ocr(db, doc)
+    audit_log(
+        db,
+        user=_,
+        action="ocr.request",
+        entity_type="document",
+        entity_id=str(doc.id),
+        new_value={"job_id": str(job.id), "languages": settings.ocr_languages},
+        **request_context(request),
+    )
+    db.commit()
     return {
         "status": "QUEUED",
         "job_id": str(job.id),
@@ -224,7 +252,7 @@ def download_document(document_id: str, db: Session = Depends(get_db), _: User =
 
 
 @router.delete("/{document_id}", status_code=204)
-def delete_document(document_id: str, db: Session = Depends(get_db), _: User = Depends(can_upload)):
+def delete_document(document_id: str, request: Request, db: Session = Depends(get_db), _: User = Depends(can_upload)):
     try:
         doc_uuid = uuid.UUID(document_id)
     except ValueError:
@@ -238,5 +266,14 @@ def delete_document(document_id: str, db: Session = Depends(get_db), _: User = D
     for run in doc.extraction_runs:
         if run.raw_response_storage_path and storage.object_exists(run.raw_response_storage_path):
             storage.delete_object(run.raw_response_storage_path)
+    audit_log(
+        db,
+        user=_,
+        action="document.delete",
+        entity_type="document",
+        entity_id=str(doc.id),
+        old_value={"filename": doc.original_filename, "sha256": doc.sha256},
+        **request_context(request),
+    )
     db.delete(doc)
     db.commit()

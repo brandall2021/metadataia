@@ -10,6 +10,7 @@ import { getToken, setToken } from "@/lib/api";
 const NAV = [
   { href: "/admin", label: "Inicio" },
   { href: "/admin/metadata", label: "Metadatos" },
+  { href: "/admin/audit", label: "Auditoría" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

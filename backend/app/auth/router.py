@@ -1,9 +1,10 @@
 """Rutas de autenticacion (FASE 3): login, refresh, logout y /me."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
+from app.audit.service import audit_log, request_context
 from app.auth.schemas import LoginRequest, TokenResponse, UserMe
 from app.core.config import settings
 from app.core.database import get_db
@@ -23,12 +24,22 @@ def _token_response(user: User) -> TokenResponse:
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)) -> TokenResponse:
     user = db.query(User).filter(User.username == body.username).one_or_none()
     if user is None or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Credenciales invalidas")
     if not user.active:
         raise HTTPException(status_code=403, detail="Usuario inactivo")
+    audit_log(
+        db,
+        user=user,
+        action="auth.login",
+        entity_type="user",
+        entity_id=str(user.id),
+        new_value={"username": user.username},
+        **request_context(request),
+    )
+    db.commit()
     return _token_response(user)
 
 

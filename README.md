@@ -12,7 +12,7 @@ Todo se administra desde el panel y se persiste en base de datos — **no se har
 |---|---|
 | Repositorio | https://github.com/brandall2021/metadataia |
 | Documentación | `docs/` (SPECIFICATION, ARCHITECTURE, y por dominio) |
-| Estado | ✅ F1–F13 completadas · FASE 14 en curso |
+| Estado | ✅ F1–F14 completadas · FASE 15 en curso |
 
 ---
 
@@ -57,7 +57,7 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 | 11 | Validación (reglas, errores, warnings, SNRD) | ✅ |
 | 12 | Revisión humana (visor, formulario dinámico, edición, evidencia, aprobación) | ✅ |
 | 13 | DSpace (configuración, auth, comunidades, colecciones, workspace, submission) | ✅ |
-| 14 | Auditoría (logs, historial, extracción IA, cambios humanos, depósitos) | ⏳ |
+| 14 | Auditoría (logs, historial, extracción IA, cambios humanos, depósitos) | ✅ |
 | 15 | Dashboard (estadísticas) | ⏳ |
 | 16 | Tests (unit, integration, API, OCR, AI mock, DSpace mock, e2e) | ⏳ |
 | 17 | Seguridad (auditoría de auth, permisos, archivos, infra) | ⏳ |
@@ -128,10 +128,17 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 - **Export SNRD-DC** (`backend/app/snrd/export.py`): `GET /api/documents/{id}/snrd` devuelve el perfil SNRD en Dublin Core (`dc.contributor.author`, `dc.date.issued`, `dc.language.iso`, `dc.identifier.other` = sha256...).
 - **Depósito** (`backend/app/deposit/router.py` + `backend/app/jobs/tasks.py`): `POST /api/documents/{id}/deposit` (202) solo si el documento está `APPROVED` y hay repositorio + colección activa con tipo asociado (si ya fue depositado o no está aprobado responde 409). La tarea `deposit_document` adopta el job `DEPOSIT`: validación final, crea el workspace item, agrega metadata SNRD-DC, sube el PDF, hace submit y registra una `Deposition` `COMPLETED` (item UUID + handle) dejando el documento `DEPOSITED`. Un fallo revierte a `APPROVED` con el error visible para reintentar; un depósito ya completado no se duplica.
 
+### Auditoría (FASE 14)
+- **Registro central** (`backend/app/audit/service.py` + tabla `audit_logs`): toda operación relevante queda anotada con usuario (o `sistema` para tareas async), acción, entidad (tipo + id), valores **anterior/nuevo**, IP (honra `X-Forwarded-For` para proxies) y user-agent — sin guardar información sensible (las credenciales de repositorios nunca entran al log).
+- **Acciones auditadas**: `auth.login`, `document.upload`, `document.delete`, `ocr.request`/`ocr.completed`, `ai.extraction` (agente, modelo, proveedor, prompt hash, cantidad de registros, tokens de entrada/salida y duración) y `ai.extraction.failed`, `metadata.normalize`, `document.validate`, `record.create`/`update`/`delete` (campo y valor anterior), `document.approve`/`reject` (una aprobación repetida no duplica), `deposit.request`/`completed`/`failed`, `repository.create`/`update`/`delete`/`sync` y `collection.update`/`delete`.
+- **Consulta** (`backend/app/audit/router.py`): `GET /api/admin/audit` (solo ADMIN, permiso `audit.view`) con filtros `action`, `entity_type`, `entity_id`, `user_id`, `from_date`, `to_date` y paginación; `GET /api/documents/{id}/history` (con permiso `document.view`) combina auditoría + jobs del pipeline + deposiciones del documento en una línea de tiempo única.
+- **Frontend**: `/admin/audit` — tabla de registros con filtros por acción/entidad, paginación y detalle de valores anterior/nuevo.
+
 ### Frontend de administración
 - `/login`: autenticación.
 - `/admin`: navegación con guard de sesión.
 - `/admin/metadata`: lista de campos y formulario de creación dinámico.
+- `/admin/audit`: consulta de auditoría con filtros y paginación.
 
 ---
 
@@ -147,6 +154,7 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
                         │  api (FastAPI)          :8000            │
                         │  /api/auth /api/users /api/admin/*       │
                         │  /api/documents /api/review /api/admin/repositories /api/deposit │
+                        │  /api/admin/audit /api/documents/{id}/history │
                         └───────┬──────────────┬─────────────┬─────┘
                                 │              │             │
                           PostgreSQL      Redis       MinIO (PDFs)
@@ -300,14 +308,14 @@ make test                    # dentro del contenedor api (instala editable si fa
 docker compose exec api pytest tests/test_ai_agents.py -q   # un grupo
 ```
 
-Estado actual: **165 tests en verde** (smoke, auth, users, ai_admin, agents, metadata, pdf, ocr, extraction, normalization, validation, review, dspace). Los endpoints externos (IA, DSpace) se simulan con `httpx.MockTransport`; el motor OCR se prueba con mocks deterministas y en vivo contra Tesseract real; `scripts/mock_ai_server.py` permite probar la extracción con IA de extremo a extremo y `scripts/mock_dspace_server.py` el depósito en DSpace REST de extremo a extremo.
+Estado actual: **176 tests en verde** (smoke, auth, users, ai_admin, agents, metadata, pdf, ocr, extraction, normalization, validation, review, dspace, audit). Los endpoints externos (IA, DSpace) se simulan con `httpx.MockTransport`; el motor OCR se prueba con mocks deterministas y en vivo contra Tesseract real; `scripts/mock_ai_server.py` permite probar la extracción con IA de extremo a extremo y `scripts/mock_dspace_server.py` el depósito en DSpace REST de extremo a extremo.
 
 ---
 
 ## 13. Roadmap
 
-- **En curso**: FASE 14 — Auditoría (registro de acciones y trazabilidad).
-- **Siguientes**: dashboard (15) → tests e2e (16) → seguridad (17) → producción (18).
+- **En curso**: FASE 15 — Dashboard (estadísticas).
+- **Siguientes**: tests e2e (16) → seguridad (17) → producción (18).
 
 ---
 

@@ -30,6 +30,20 @@ export default function AdminHome() {
             </Link>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Auditoría</CardTitle>
+            <CardDescription>
+              Registro de todas las operaciones: logins, subidas, extracción IA,
+              cambios humanos, aprobaciones y depósitos.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/admin/audit">
+              <Button variant="outline">Ir a Auditoría</Button>
+            </Link>
+          </CardContent>
+        </Card>
         {["Agentes IA", "Repositorios"].map((title) => (
           <Card key={title}>
             <CardHeader>

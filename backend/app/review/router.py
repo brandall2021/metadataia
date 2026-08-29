@@ -8,10 +8,11 @@ editar valores, crear registros faltantes, borrar registros erróneos, aprobar
 import uuid
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.audit.service import audit_log, request_context
 from app.core.database import get_db
 from app.core.dependencies import require_permission
 from app.extraction.engine import field_key
@@ -94,17 +95,30 @@ def update_record(
     document_id: UUID,
     record_id: UUID,
     body: RecordUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(can_review),
 ):
     doc = _get_doc(db, document_id)
     rec = _get_record(db, document_id, record_id)
     _ensure_editable(doc)
+    field = field_key(rec.metadata_field.element, rec.metadata_field.qualifier)
+    old = {"field": field, "value": rec.value}
     rec.value = body.value
     rec.manually_modified = True
     rec.validated = False
     rec.normalized = False
     _mark_review(db, doc)
+    audit_log(
+        db,
+        user=user,
+        action="record.update",
+        entity_type="document",
+        entity_id=str(doc.id),
+        old_value=old,
+        new_value={"field": field, "value": body.value},
+        **request_context(request),
+    )
     db.commit()
     db.refresh(rec)
     return _record_out(rec)
@@ -114,6 +128,7 @@ def update_record(
 def create_record(
     document_id: UUID,
     body: RecordCreate,
+    request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(can_review),
 ):
@@ -149,6 +164,15 @@ def create_record(
     )
     db.add(rec)
     _mark_review(db, doc)
+    audit_log(
+        db,
+        user=user,
+        action="record.create",
+        entity_type="document",
+        entity_id=str(doc.id),
+        new_value={"field": field_key(fld.element, fld.qualifier), "value": body.value, "source": "MANUAL"},
+        **request_context(request),
+    )
     db.commit()
     db.refresh(rec)
     return _record_out(rec)
@@ -158,12 +182,22 @@ def create_record(
 def delete_record(
     document_id: UUID,
     record_id: UUID,
+    request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(can_review),
 ):
     doc = _get_doc(db, document_id)
     rec = _get_record(db, document_id, record_id)
     _ensure_editable(doc)
+    audit_log(
+        db,
+        user=user,
+        action="record.delete",
+        entity_type="document",
+        entity_id=str(doc.id),
+        old_value={"field": field_key(rec.metadata_field.element, rec.metadata_field.qualifier), "value": rec.value},
+        **request_context(request),
+    )
     db.delete(rec)
     _mark_review(db, doc)
     db.commit()
@@ -172,6 +206,7 @@ def delete_record(
 @router.post("/{document_id}/approve", response_model=ReviewResult)
 def approve_document(
     document_id: UUID,
+    request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(can_approve),
 ):
@@ -201,6 +236,15 @@ def approve_document(
         )
     doc = _get_doc(db, document_id)
     doc.status = "APPROVED"
+    audit_log(
+        db,
+        user=user,
+        action="document.approve",
+        entity_type="document",
+        entity_id=str(doc.id),
+        new_value={"status": "APPROVED"},
+        **request_context(request),
+    )
     db.commit()
     db.refresh(doc)
     return ReviewResult(document_id=doc.id, status=doc.status)
@@ -209,6 +253,7 @@ def approve_document(
 @router.post("/{document_id}/reject", response_model=ReviewResult)
 def reject_document(
     document_id: UUID,
+    request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(can_review),
 ):
@@ -219,6 +264,15 @@ def reject_document(
             detail="No se puede rechazar un documento ya aprobado",
         )
     doc.status = "REJECTED"
+    audit_log(
+        db,
+        user=user,
+        action="document.reject",
+        entity_type="document",
+        entity_id=str(doc.id),
+        new_value={"status": "REJECTED"},
+        **request_context(request),
+    )
     db.commit()
     db.refresh(doc)
     return ReviewResult(document_id=doc.id, status=doc.status)

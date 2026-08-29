@@ -4,6 +4,7 @@ from uuid import UUID
 
 from celery import shared_task
 
+from app.audit.service import audit_log
 from app.core import storage
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -90,6 +91,17 @@ def run_ocr(document_id: str, languages: str | None = None) -> dict:
             "pages_processed": len(texts),
             "output_object": ocr_key,
         }
+        audit_log(
+            db,
+            action="ocr.completed",
+            entity_type="document",
+            entity_id=document_id,
+            new_value={
+                "pages_processed": len(texts),
+                "languages": langs,
+                "duration_ms": (result["meta"] or {}).get("duration_ms"),
+            },
+        )
         db.commit()
         if settings.auto_ai:
             celery_app.send_task("app.jobs.tasks.extract_metadata", args=[str(doc.id)])
@@ -242,6 +254,22 @@ def extract_metadata(document_id: str) -> dict:
             "output_tokens": call["output_tokens"],
             "raw_object": raw_key,
         }
+        audit_log(
+            db,
+            action="ai.extraction",
+            entity_type="document",
+            entity_id=document_id,
+            new_value={
+                "agent": agent.code,
+                "model": model.model_identifier,
+                "provider": provider.code,
+                "prompt_hash": run.prompt_hash,
+                "records": len(records),
+                "time_ms": call["time_ms"],
+                "input_tokens": call["input_tokens"],
+                "output_tokens": call["output_tokens"],
+            },
+        )
         db.commit()
         if settings.auto_normalize and records:
             normalize_metadata(document_id)
@@ -271,6 +299,13 @@ def extract_metadata(document_id: str) -> dict:
                 job.status = "ERROR"
                 job.finished_at = datetime.now(timezone.utc)
                 job.error_message = str(exc)[:2000]
+        audit_log(
+            db,
+            action="ai.extraction.failed",
+            entity_type="document",
+            entity_id=document_id,
+            new_value={"error": str(exc)[:1000]},
+        )
         db.commit()
         return {"status": "ERROR", "document_id": document_id, "error": str(exc)[:1000]}
     finally:
@@ -354,6 +389,13 @@ def normalize_metadata(document_id: str) -> dict:
             "changed": changed,
             "rule": "deterministic",
         }
+        audit_log(
+            db,
+            action="metadata.normalize",
+            entity_type="document",
+            entity_id=document_id,
+            new_value={"records": len(records), "changed": changed},
+        )
         db.commit()
         return {
             "status": "COMPLETED",
@@ -470,6 +512,18 @@ def validate_metadata(document_id: str) -> dict:
             "warnings": len(warnings),
             "valid": not errors,
         }
+        audit_log(
+            db,
+            action="document.validate",
+            entity_type="document",
+            entity_id=document_id,
+            new_value={
+                "valid": not errors,
+                "errors": len(errors),
+                "warnings": len(warnings),
+                "status": doc.status,
+            },
+        )
         db.commit()
         return {
             "status": "COMPLETED",
@@ -633,6 +687,18 @@ def deposit_document(document_id: str) -> dict:
             "handle": submitted.get("handle"),
             "workspace_item": ws.get("id"),
         }
+        audit_log(
+            db,
+            action="deposit.completed",
+            entity_type="document",
+            entity_id=document_id,
+            new_value={
+                "repository_code": repo.code,
+                "collection": collection.name,
+                "external_item_id": submitted.get("item_uuid"),
+                "handle": submitted.get("handle"),
+            },
+        )
         db.commit()
         return {
             "status": "COMPLETED",
@@ -664,5 +730,12 @@ def deposit_document(document_id: str) -> dict:
             doc = db.get(Document, UUID(document_id))
             if doc is not None and doc.status == "DEPOSITING":
                 doc.status = "APPROVED"
+            audit_log(
+                db,
+                action="deposit.failed",
+                entity_type="document",
+                entity_id=document_id,
+                new_value={"error": str(exc)[:1000]},
+            )
             db.commit()
         return {"status": "ERROR", "document_id": document_id, "error": str(exc)[:1000]}

@@ -7,14 +7,15 @@ colecciones, y asociacion de tipo documental con coleccion.
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.audit.service import audit_log, request_context
 from app.core.database import get_db
 from app.core.dependencies import require_permission
 from app.dspace.connector import build_connector
-from app.models import DocumentType, Repository, RepositoryCollection
+from app.models import DocumentType, Repository, RepositoryCollection, User
 
 router = APIRouter(tags=["repositories"])
 
@@ -93,6 +94,19 @@ def _repo_out(repo: Repository) -> RepositoryOut:
     )
 
 
+def _public_repo_state(repo: Repository) -> dict:
+    """Estado de un repositorio sin exponer la credencial."""
+    return {
+        "name": repo.name,
+        "code": repo.code,
+        "base_url": repo.base_url,
+        "api_url": repo.api_url,
+        "authentication_type": repo.authentication_type,
+        "username": repo.username,
+        "active": repo.active,
+    }
+
+
 def _collection_out(col: RepositoryCollection) -> CollectionOut:
     doc_type: DocumentType | None = col.document_type
     return CollectionOut(
@@ -129,8 +143,9 @@ def list_repositories(db: Session = Depends(get_db), _: str = Depends(can_manage
 @router.post("/admin/repositories", response_model=RepositoryOut, status_code=201)
 def create_repository(
     body: RepositoryCreate,
+    request: Request,
     db: Session = Depends(get_db),
-    _: str = Depends(can_manage),
+    user: User = Depends(can_manage),
 ):
     existing = db.query(Repository).filter(Repository.code == body.code).one_or_none()
     if existing is not None:
@@ -147,6 +162,17 @@ def create_repository(
         configuration_json=cfg,
     )
     db.add(repo)
+    new_value = _public_repo_state(repo)
+    new_value["credential"] = MASKED if body.credential else None
+    audit_log(
+        db,
+        user=user,
+        action="repository.create",
+        entity_type="repository",
+        entity_id=str(repo.id),
+        new_value=new_value,
+        **request_context(request),
+    )
     db.commit()
     db.refresh(repo)
     return _repo_out(repo)
@@ -161,10 +187,12 @@ def get_repository(repository_id: uuid.UUID, db: Session = Depends(get_db), _: s
 def update_repository(
     repository_id: uuid.UUID,
     body: RepositoryUpdate,
+    request: Request,
     db: Session = Depends(get_db),
-    _: str = Depends(can_manage),
+    user: User = Depends(can_manage),
 ):
     repo = _get_repo(db, repository_id)
+    old = _public_repo_state(repo)
     if body.code is not None and body.code != repo.code:
         dup = db.query(Repository).filter(Repository.code == body.code).one_or_none()
         if dup is not None:
@@ -180,20 +208,54 @@ def update_repository(
         cfg = dict(repo.configuration_json or {})
         cfg["credential"] = body.credential
         repo.configuration_json = cfg
+    new = _public_repo_state(repo)
+    if body.credential:
+        new["credential"] = MASKED
+    diff = {k: {"old": old[k], "new": new[k]} for k in old if old[k] != new[k]}
+    if diff:
+        audit_log(
+            db,
+            user=user,
+            action="repository.update",
+            entity_type="repository",
+            entity_id=str(repo.id),
+            old_value=diff,
+            new_value={"changed": list(diff)},
+            **request_context(request),
+        )
     db.commit()
     db.refresh(repo)
     return _repo_out(repo)
 
 
 @router.delete("/admin/repositories/{repository_id}", status_code=204)
-def delete_repository(repository_id: uuid.UUID, db: Session = Depends(get_db), _: str = Depends(can_manage)):
+def delete_repository(
+    repository_id: uuid.UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(can_manage),
+):
     repo = _get_repo(db, repository_id)
+    audit_log(
+        db,
+        user=user,
+        action="repository.delete",
+        entity_type="repository",
+        entity_id=str(repo.id),
+        old_value=_public_repo_state(repo),
+        **request_context(request),
+    )
     db.delete(repo)
     db.commit()
 
 
 @router.post("/admin/repositories/{repository_id}/collections/sync", response_model=SyncOut)
-def sync_collections(repository_id: uuid.UUID, db: Session = Depends(get_db), _: str = Depends(can_manage)):
+def sync_collections(
+    repository_id: uuid.UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(can_manage),
+):
     repo = _get_repo(db, repository_id)
     connector = build_connector(repo)
     token = connector.authenticate()
@@ -228,6 +290,16 @@ def sync_collections(repository_id: uuid.UUID, db: Session = Depends(get_db), _:
             col.active = False
     db.commit()
     total = db.query(RepositoryCollection).filter(RepositoryCollection.repository_id == repo.id).count()
+    audit_log(
+        db,
+        user=user,
+        action="repository.sync",
+        entity_type="repository",
+        entity_id=str(repo.id),
+        new_value={"communities": len(communities), "collections": len(seen) or total},
+        **request_context(request),
+    )
+    db.commit()
     return SyncOut(repository_id=repo.id, communities=len(communities), collections=len(seen) or total)
 
 
@@ -248,16 +320,31 @@ def update_collection(
     repository_id: uuid.UUID,
     collection_id: uuid.UUID,
     body: CollectionUpdate,
+    request: Request,
     db: Session = Depends(get_db),
-    _: str = Depends(can_manage),
+    user: User = Depends(can_manage),
 ):
     col = _get_collection(db, repository_id, collection_id)
+    old = {"name": col.name, "handle": col.handle, "document_type_id": str(col.document_type_id) if col.document_type_id else None, "active": col.active}
     if body.document_type_id is not None:
         if db.get(DocumentType, body.document_type_id) is None:
             raise HTTPException(status_code=404, detail="Tipo documental no encontrado")
         col.document_type_id = body.document_type_id
     if body.active is not None:
         col.active = body.active
+    new = {"name": col.name, "handle": col.handle, "document_type_id": str(col.document_type_id) if col.document_type_id else None, "active": col.active}
+    changed = any(old[k] != new[k] for k in old)
+    if changed:
+        audit_log(
+            db,
+            user=user,
+action="collection.update",
+                entity_type="repository",
+                entity_id=str(repository_id),
+            old_value=old,
+            new_value=new,
+            **request_context(request),
+        )
     db.commit()
     db.refresh(col)
     return _collection_out(col)
@@ -267,9 +354,19 @@ def update_collection(
 def delete_collection(
     repository_id: uuid.UUID,
     collection_id: uuid.UUID,
+    request: Request,
     db: Session = Depends(get_db),
-    _: str = Depends(can_manage),
+    user: User = Depends(can_manage),
 ):
     col = _get_collection(db, repository_id, collection_id)
+    audit_log(
+        db,
+        user=user,
+        action="collection.delete",
+        entity_type="repository",
+        entity_id=str(repo_id),
+        old_value={"name": col.name, "handle": col.handle},
+        **request_context(request),
+    )
     db.delete(col)
     db.commit()

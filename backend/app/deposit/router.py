@@ -7,14 +7,15 @@ un deposito exitoso nunca se duplica.
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.audit.service import audit_log, request_context
 from app.core.database import get_db
 from app.core.dependencies import require_permission
 from app.jobs.celery_app import celery_app
-from app.models import Deposition, Document, ProcessingJob, RepositoryCollection
+from app.models import Deposition, Document, ProcessingJob, RepositoryCollection, User
 from app.snrd.export import dc_fields
 
 router = APIRouter(prefix="/documents", tags=["documents-deposit"])
@@ -69,8 +70,9 @@ def _resolve_collection(db: Session, doc: Document) -> RepositoryCollection | No
 @router.post("/{document_id}/deposit", response_model=DepositRequestOut, status_code=202)
 def request_deposit(
     document_id: str,
+    request: Request,
     db: Session = Depends(get_db),
-    _: str = Depends(can_deposit),
+    user: User = Depends(can_deposit),
 ):
     try:
         doc_uuid = uuid.UUID(document_id)
@@ -98,6 +100,16 @@ def request_deposit(
     if prev is not None:
         raise HTTPException(status_code=409, detail="El documento ya fue depositado")
     job = _enqueue_deposit(db, doc)
+    audit_log(
+        db,
+        user=user,
+        action="deposit.request",
+        entity_type="document",
+        entity_id=str(doc.id),
+        new_value={"job_id": str(job.id), "repository_id": str(repo.id), "collection": collection.name},
+        **request_context(request),
+    )
+    db.commit()
     return DepositRequestOut(document_id=doc.id, status="PENDING", job_id=job.id)
 
 
