@@ -44,6 +44,20 @@ export default function AdminHome() {
             </Link>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Dashboard</CardTitle>
+            <CardDescription>
+              Estadísticas del sistema: documentos por estado, procesamiento IA,
+              errores por agente y modelo, depósitos y tendencia diaria.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/admin/dashboard">
+              <Button variant="outline">Ver Dashboard</Button>
+            </Link>
+          </CardContent>
+        </Card>
         {["Agentes IA", "Repositorios"].map((title) => (
           <Card key={title}>
             <CardHeader>

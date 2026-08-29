@@ -14,6 +14,7 @@ from app.review.router import router as review_router
 from app.repositories.router import router as repositories_router
 from app.deposit.router import router as deposit_router
 from app.audit.router import router as audit_router, history_router as audit_history_router
+from app.dashboard.router import router as dashboard_router
 from app.core import storage
 from app.core.config import settings
 from app.core.database import get_db
@@ -50,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(deposit_router, prefix="/api")
     app.include_router(audit_router, prefix="/api")
     app.include_router(audit_history_router, prefix="/api")
+    app.include_router(dashboard_router, prefix="/api")
 
     @app.get("/health", tags=["core"])
     def health(db: Session = Depends(get_db)) -> dict:

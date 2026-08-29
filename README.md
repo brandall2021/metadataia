@@ -12,7 +12,7 @@ Todo se administra desde el panel y se persiste en base de datos — **no se har
 |---|---|
 | Repositorio | https://github.com/brandall2021/metadataia |
 | Documentación | `docs/` (SPECIFICATION, ARCHITECTURE, y por dominio) |
-| Estado | ✅ F1–F14 completadas · FASE 15 en curso |
+| Estado | ✅ F1–F15 completadas · FASE 16 (tests e2e) en curso |
 
 ---
 
@@ -58,7 +58,7 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 | 12 | Revisión humana (visor, formulario dinámico, edición, evidencia, aprobación) | ✅ |
 | 13 | DSpace (configuración, auth, comunidades, colecciones, workspace, submission) | ✅ |
 | 14 | Auditoría (logs, historial, extracción IA, cambios humanos, depósitos) | ✅ |
-| 15 | Dashboard (estadísticas) | ⏳ |
+| 15 | Dashboard (estadísticas) | ✅ |
 | 16 | Tests (unit, integration, API, OCR, AI mock, DSpace mock, e2e) | ⏳ |
 | 17 | Seguridad (auditoría de auth, permisos, archivos, infra) | ⏳ |
 | 18 | Producción (docs, Dockerfiles prod, deploy) | ⏳ |
@@ -134,9 +134,19 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 - **Consulta** (`backend/app/audit/router.py`): `GET /api/admin/audit` (solo ADMIN, permiso `audit.view`) con filtros `action`, `entity_type`, `entity_id`, `user_id`, `from_date`, `to_date` y paginación; `GET /api/documents/{id}/history` (con permiso `document.view`) combina auditoría + jobs del pipeline + deposiciones del documento en una línea de tiempo única.
 - **Frontend**: `/admin/audit` — tabla de registros con filtros por acción/entidad, paginación y detalle de valores anterior/nuevo.
 
+### Dashboard (FASE 15)
+- **Estadísticas agregadas** (`backend/app/dashboard/router.py` + `schemas.py`): `GET /api/admin/dashboard` (permiso `dashboard.view`, ya asignado a ADMIN, CATALOGADOR y REVISOR) consolida el estado completo del sistema en un solo payload:
+  - **Documentos**: total, procesados, en revisión, aprobados, rechazados, depositados y conteo por estado.
+  - **Procesamiento**: OCR, extracciones IA, normalizaciones y validaciones ejecutadas; tiempos promedio (ms) globales y por tipo de job; errores por tipo; jobs por estado.
+  - **Extracción IA**: ejecuciones, exitosas y errores; tokens promedio entrada/salida; tiempo promedio; errores por agente y por modelo.
+  - **Depósitos**: total, completados, fallidos y pendientes.
+  - **Extras**: tendencia de documentos por día (últimos 7 días), total de usuarios y repositorios.
+- **Frontend**: `/admin/dashboard` — tarjetas de métricas, tablas de errores por agente/modelo, tiempos por tipo de job y gráfico de barras de tendencia diaria.
+
 ### Frontend de administración
 - `/login`: autenticación.
 - `/admin`: navegación con guard de sesión.
+- `/admin/dashboard`: dashboard de estadísticas del sistema.
 - `/admin/metadata`: lista de campos y formulario de creación dinámico.
 - `/admin/audit`: consulta de auditoría con filtros y paginación.
 
@@ -308,13 +318,13 @@ make test                    # dentro del contenedor api (instala editable si fa
 docker compose exec api pytest tests/test_ai_agents.py -q   # un grupo
 ```
 
-Estado actual: **176 tests en verde** (smoke, auth, users, ai_admin, agents, metadata, pdf, ocr, extraction, normalization, validation, review, dspace, audit). Los endpoints externos (IA, DSpace) se simulan con `httpx.MockTransport`; el motor OCR se prueba con mocks deterministas y en vivo contra Tesseract real; `scripts/mock_ai_server.py` permite probar la extracción con IA de extremo a extremo y `scripts/mock_dspace_server.py` el depósito en DSpace REST de extremo a extremo.
+Estado actual: **183 tests en verde** (smoke, auth, users, ai_admin, agents, metadata, pdf, ocr, extraction, normalization, validation, review, dspace, audit, dashboard). Los endpoints externos (IA, DSpace) se simulan con `httpx.MockTransport`; el motor OCR se prueba con mocks deterministas y en vivo contra Tesseract real; `scripts/mock_ai_server.py` permite probar la extracción con IA de extremo a extremo y `scripts/mock_dspace_server.py` el depósito en DSpace REST de extremo a extremo.
 
 ---
 
 ## 13. Roadmap
 
-- **En curso**: FASE 15 — Dashboard (estadísticas).
+- **Completadas**: F1–F15 (autenticación, usuarios, IA, metadatos, PDF, OCR, extracción, normalización, validación, revisión, DSpace, auditoría y dashboard).
 - **Siguientes**: tests e2e (16) → seguridad (17) → producción (18).
 
 ---
