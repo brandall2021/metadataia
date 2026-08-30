@@ -112,7 +112,7 @@ FAKE_RESPONSE = {
 class NormStack:
     """Esquema + vocabulario de idiomas + tipo + proveedor/modelo/agente via API."""
 
-    def __init__(self, client, admin_headers):
+    def __init__(self, client, admin_headers, ai_base_url: str = "http://mock-ai/v1"):
         self.client = client
         self.headers = admin_headers
         self.ids: list[str] = []
@@ -182,12 +182,13 @@ class NormStack:
                 "name": f"Mock {uniq}",
                 "code": f"mock-provider-{uniq}",
                 "type": "openai-compatible",
-                "base_url": "http://mock-ai/v1",
+                "base_url": ai_base_url,
                 "api_key": "",
             },
         )
         assert r.status_code == 201, r.text
         self.provider_id = r.json()["id"]
+        self.provider_code = f"mock-provider-{uniq}"
 
         r = client.post(
             "/api/admin/ai/models",
@@ -227,6 +228,7 @@ class NormStack:
         )
         assert r.status_code == 201, r.text
         self.agent_id = r.json()["id"]
+        self.agent_code = f"agente-tesis-{uniq}"
 
         r = client.put(
             f"/api/admin/document-types/{self.type_id}",

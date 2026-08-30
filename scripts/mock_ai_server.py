@@ -96,4 +96,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    HTTPServer(("0.0.0.0", 9999), Handler).serve_forever()
+    import sys
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 9999
+    HTTPServer(("0.0.0.0", port), Handler).serve_forever()

@@ -12,7 +12,7 @@ Todo se administra desde el panel y se persiste en base de datos — **no se har
 |---|---|
 | Repositorio | https://github.com/brandall2021/metadataia |
 | Documentación | `docs/` (SPECIFICATION, ARCHITECTURE, y por dominio) |
-| Estado | ✅ F1–F15 completadas · FASE 16 (tests e2e) en curso |
+| Estado | ✅ F1–F16 completadas · FASE 17 (seguridad) en curso |
 
 ---
 
@@ -59,7 +59,7 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 | 13 | DSpace (configuración, auth, comunidades, colecciones, workspace, submission) | ✅ |
 | 14 | Auditoría (logs, historial, extracción IA, cambios humanos, depósitos) | ✅ |
 | 15 | Dashboard (estadísticas) | ✅ |
-| 16 | Tests (unit, integration, API, OCR, AI mock, DSpace mock, e2e) | ⏳ |
+| 16 | Tests (unit, integration, API, OCR, AI mock, DSpace mock, e2e) | ✅ |
 | 17 | Seguridad (auditoría de auth, permisos, archivos, infra) | ⏳ |
 | 18 | Producción (docs, Dockerfiles prod, deploy) | ⏳ |
 
@@ -142,6 +142,12 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
   - **Depósitos**: total, completados, fallidos y pendientes.
   - **Extras**: tendencia de documentos por día (últimos 7 días), total de usuarios y repositorios.
 - **Frontend**: `/admin/dashboard` — tarjetas de métricas, tablas de errores por agente/modelo, tiempos por tipo de job y gráfico de barras de tendencia diaria.
+
+### Tests e2e (FASE 16)
+- **Suite e2e hermética** (`backend/tests/test_e2e.py`): a diferencia del resto de la suite (mocks en proceso), arranca `scripts/mock_ai_server.py` y `scripts/mock_dspace_server.py` como subprocesos en puertos libres y ejecuta el pipeline por **HTTP real** — extracción IA (conector `/v1/chat/completions` real con tokens verificables 123/45) y depósito DSpace (`Dspace9Connector` real sin `MockTransport`): repo → sync colecciones → asociar tipo → subir → extraer → normalizar → validar → edición humana → aprobar → depositar `DEPOSITED` (item + handle) → deduplicación NOOP → auditoría → historia unificada → dashboard.
+- **Permisos y estados**: 401 sin token, 403 para el revisor (auditoría/repos) con `dashboard.view` permitido, 409 al depositar sin aprobar, deposit task ERROR.
+- **OCR real**: PDF escaneado en blanco → detección `needs_ocr` → `run_ocr` con Tesseract real (`--skip-text`) → job y páginas marcadas + auditoría `ocr.completed` (skip si no hay herramientas).
+- Los mock servers aceptan el puerto como argumento opcional (default 9999/9998); el contenedor api monta `scripts/` para poder ejecutarlos.
 
 ### Frontend de administración
 - `/login`: autenticación.
@@ -318,14 +324,14 @@ make test                    # dentro del contenedor api (instala editable si fa
 docker compose exec api pytest tests/test_ai_agents.py -q   # un grupo
 ```
 
-Estado actual: **183 tests en verde** (smoke, auth, users, ai_admin, agents, metadata, pdf, ocr, extraction, normalization, validation, review, dspace, audit, dashboard). Los endpoints externos (IA, DSpace) se simulan con `httpx.MockTransport`; el motor OCR se prueba con mocks deterministas y en vivo contra Tesseract real; `scripts/mock_ai_server.py` permite probar la extracción con IA de extremo a extremo y `scripts/mock_dspace_server.py` el depósito en DSpace REST de extremo a extremo.
+Estado actual: **187 tests en verde** (smoke, auth, users, ai_admin, agents, metadata, pdf, ocr, extraction, normalization, validation, review, dspace, audit, dashboard, e2e). Los endpoints externos (IA, DSpace) se simulan con `httpx.MockTransport`; el motor OCR se prueba con mocks deterministas y en vivo contra Tesseract real. La suite **e2e** (`backend/tests/test_e2e.py`) arranca los mock servers reales como subprocesos en puertos libres y ejecuta el pipeline completo por HTTP real (extracción IA y depósito DSpace sin monkeypatch); `scripts/mock_ai_server.py` y `scripts/mock_dspace_server.py` aceptan el puerto como argumento opcional y también permiten probar de extremo a extremo desde Docker.
 
 ---
 
 ## 13. Roadmap
 
-- **Completadas**: F1–F15 (autenticación, usuarios, IA, metadatos, PDF, OCR, extracción, normalización, validación, revisión, DSpace, auditoría y dashboard).
-- **Siguientes**: tests e2e (16) → seguridad (17) → producción (18).
+- **Completadas**: F1–F16 — autenticación, usuarios, IA, metadatos, PDF, OCR, extracción, normalización, validación, revisión, DSpace, auditoría, dashboard y tests e2e.
+- **Siguientes**: seguridad (17) → producción (18).
 
 ---
 

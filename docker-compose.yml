@@ -58,6 +58,7 @@ services:
       - ./backend/alembic.ini:/app/alembic.ini
       - ./backend/alembic:/app/alembic
       - ./backend/tests:/app/tests
+      - ./scripts:/app/scripts
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
