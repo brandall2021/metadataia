@@ -12,7 +12,7 @@ Todo se administra desde el panel y se persiste en base de datos — **no se har
 |---|---|
 | Repositorio | https://github.com/brandall2021/metadataia |
 | Documentación | `docs/` (SPECIFICATION, ARCHITECTURE, y por dominio) |
-| Estado | ✅ F1–F17 completadas · FASE 18 (despliegue) en curso |
+| Estado | ✅ F1–F18 completadas (incluye despliegue producción + guía Dokploy) |
 
 ---
 
@@ -156,7 +156,15 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 - **Subida de archivos**: el upload lee con límite explícito (413 si excede el máximo, sin cargar el archivo completo en memoria) y el nombre original se sanea (se eliminan `\r`, `\n`, comillas y caracteres de control) antes de usarse en `Content-Disposition` (evita inyección de cabeceras en la descarga).
 - **Auto-bloqueo de administradores**: un admin no puede desactivarse, eliminarse ni quitarse el rol `ADMIN` a sí mismo.
 - **Aislamiento de prompts**: el texto del documento solo ocupa el placeholder `{{document_text}}` del prompt de usuario; el prompt de sistema es fijo (verificado con test) y no puede ser reescrito por el contenido del PDF.
-- **Auditado sin cambios**: CORS configurado, MIME/extension y contenido real del PDF validados, claves de storage derivadas de SHA-256 (sin path traversal), API keys de proveedores e IA y credenciales de repositorios siempre enmascaradas/cifradas (Fernet), auditoría sin secretos, errores 500 sin detalles internos. En producción se recomienda rate limiting y TLS en el proxy (FASE 18).
+- **Auditado sin cambios**: CORS configurado, MIME/extension y contenido real del PDF validados, claves de storage derivadas de SHA-256 (sin path traversal), API keys de proveedores e IA y credenciales de repositorios siempre enmascaradas/cifradas (Fernet), auditoría sin secretos, errores 500 sin detalles internos. En producción el TLS lo aporta el proxy de Dokploy (FASE 18).
+
+### Producción (FASE 18)
+- **Compose de producción** (`docker-compose.prod.yml`, proyecto `metadato-prod`): postgres, redis, minio, api, worker (Celery), frontend (Next build + start) y un contenedor **`migrate` one-shot** (`alembic upgrade head`) que corre en el arranque. Secretos obligatorios vía `environment` con `${VAR:?Defina …}`: sin `.env` completo el stack **no arranca**. Puertos por defecto sin conflicto con dev: `POSTGRES_PORT=5433`, `REDIS_PORT=6380`, `MINIO_PORT=9002`, `MINIO_CONSOLE_PORT=9003`, `API_PORT=8001`, `FRONTEND_PORT=3001` (todos override por env).
+- **Entrada única por dominio**: el navegador solo ve `https://MI.DOMINIO.GOB.AR` (frontend `:3000`). El frontend reescribe `/api/*` → `http://api:8000/api/*` (`next.config.ts` con `API_INTERNAL_URL` horneada en build via `frontend/Dockerfile.prod`), así la API no necesita puerto público, CORS ni subdominio adicional; solo el puerto 3000 se publica en Dokploy.
+- **Guarda de producción activa**: `APP_ENV=production` + `seccomp:unconfined` activo para postgres (requerido en kernel < 4.8, inofensivo en kernels modernos).
+- **Bootstrap**: tras el primer despliegue, desde la terminal del contenedor `api` en Dokploy: `python -m app.seed` (crea roles/permisos y el usuario `admin`, idempotente).
+- **Operación**: `make prod-config|prod-up|prod-down|prod-logs|prod-seed|prod-backup`; `deploy/backup.sh` (pg_dump + tar de MinIO, conserva 7).
+- **Guía paso a paso en Dokploy**: ver `docs/DEPLOYMENT.md` (proyecto → servicio Docker Compose apuntando a `docker-compose.prod.yml` desde el repo → variables de entorno desde `.env.prod.example` → deploy → dominios: contenedor `frontend`, puerto 3000, HTTPS Let's Encrypt).
 
 ### Frontend de administración
 - `/login`: autenticación.
@@ -250,7 +258,7 @@ cp .env.example .env          # ajustar credenciales (claves JWT/secret ≥ 32 c
 make dev-up                   # construye y levanta todos los servicios
 make migrate                  # aplica migraciones (alembic upgrade head)
 make seed                     # carga datos iniciales (usuarios/roles/permisos)
-make test                     # 116 tests del backend
+make test                     # 201 tests del backend
 ```
 
 | Servicio | URL |
@@ -339,16 +347,18 @@ Estado actual: **201 tests en verde** (smoke, auth, users, ai_admin, agents, met
 
 ## 13. Roadmap
 
-- **Completadas**: F1–F17 — autenticación, usuarios, IA, metadatos, PDF, OCR, extracción, normalización, validación, revisión, DSpace, auditoría, dashboard, tests e2e y seguridad.
-- **Siguientes**: producción (18).
+- **Completadas**: F1–F18 — autenticación, usuarios, IA, metadatos, PDF, OCR, extracción, normalización, validación, revisión, DSpace, auditoría, dashboard, tests e2e, seguridad y **producción/Dokploy**.
+- **Siguientes**: despliegue en el servidor destino, ajuste fino operativo (monitoreo, rate limiting) y ampliación de la cobertura de tests del frontend.
 
 ---
 
 ## 14. Despliegue
 
-- Repositorio alojado en **GitHub** (privado).
-- Puesta en producción prevista con **Dokploy** (Compose de producción, volúmenes nombrados, migración en el arranque y `docker-compose.prod.yml`).
-- Documentación de despliegue se completa en FASE 18 (`docs/DEPLOYMENT.md`).
+- Repositorio alojado en **GitHub** (privado): `https://github.com/brandall2021/metadataia`.
+- Producción con **Dokploy**: `docker-compose.prod.yml` (proyecto `metadato-prod`, volúmenes nombrados, migración en el arranque, secretos obligatorios).
+- **Guía completa paso a paso (Dokploy, variables, bootstrap, backups, troubleshooting, firewall del host)**: `docs/DEPLOYMENT.md`.
+- Plantilla de variables: `.env.prod.example` (secretos con `openssl rand -base64 48`).
+- Ruta alternativa documentada (subdominio `api.MI.DOMINIO` con CORS) si se prefiere exponer la API por separado.
 
 ---
 
@@ -359,9 +369,16 @@ make dev-up    # levantar todos los servicios
 make build     # reconstruir imágenes
 make migrate   # alembic upgrade head
 make seed      # datos iniciales
-make test      # tests del backend
+make test      # tests del backend (201 en verde)
 make logs      # logs en vivo
 make ps        # estado de servicios
+
+# Producción (FASE 18)
+make prod-config   # valida docker-compose.prod.yml con tu .env
+make prod-up       # build + arranque del stack prod (migración incluida)
+make prod-logs     # logs del stack prod
+make prod-seed     # bootstrap admin/roles (una vez, post-deploy)
+make prod-backup   # pg_dump + tar de MinIO en ./backups/
 ```
 
 Nueva migración:

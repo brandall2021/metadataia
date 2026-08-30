@@ -1,7 +1,10 @@
 "use client";
 
+// Si no se define NEXT_PUBLIC_API_URL, se usa el mismo origen con /api
+// (produccion: el proxy de Dokploy enruta /api hacia el backend).
 export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_URL ??
+  (typeof window !== "undefined" ? `${window.location.origin}/api` : "/api");
 
 const TOKEN_KEY = "metadataia_token";
 
