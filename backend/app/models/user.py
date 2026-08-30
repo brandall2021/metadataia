@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Table, Uuid, func
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -31,6 +31,7 @@ class User(Base):
     first_name: Mapped[str | None] = mapped_column(String(150))
     last_name: Mapped[str | None] = mapped_column(String(150))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -62,3 +63,16 @@ class Permission(Base):
     roles: Mapped[list[Role]] = relationship(
         secondary=role_permissions, back_populates="permissions"
     )
+
+
+class RevokedToken(Base):
+    """JWT revocados (logout / desactivacion de usuario). Se valida por jti (FASE 17)."""
+
+    __tablename__ = "revoked_tokens"
+
+    jti: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE")
+    )
+    revoked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)

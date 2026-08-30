@@ -18,7 +18,7 @@ from app.models.metadata import (
     VocabularyValue,
 )
 from app.models.repository import Repository, RepositoryCollection
-from app.models.user import Permission, Role, User
+from app.models.user import Permission, RevokedToken, Role, User
 
 __all__ = [
     "AIProvider",
@@ -39,6 +39,7 @@ __all__ = [
     "ProcessingJob",
     "Repository",
     "RepositoryCollection",
+    "RevokedToken",
     "Role",
     "User",
     "ValidationResult",

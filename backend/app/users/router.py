@@ -101,35 +101,47 @@ def create_user(body: UserCreate, _: User = Depends(admin_users), db: Session = 
 def update_user(
     user_id: str,
     body: UserUpdate,
-    _: User = Depends(admin_users),
+    user: User = Depends(admin_users),
     db: Session = Depends(get_db),
 ):
-    user = _get_user_by_id(db, user_id)
+    target = _get_user_by_id(db, user_id)
+    if target.id == user.id:
+        if body.active is False:
+            raise HTTPException(status_code=400, detail="No puede desactivarse a si mismo")
+        if body.role_codes is not None and "ADMIN" not in body.role_codes:
+            raise HTTPException(
+                status_code=400, detail="No puede quitarse el rol de administrador a si mismo"
+            )
     if body.email is not None:
-        user.email = body.email
+        target.email = body.email
     if body.password is not None:
-        user.password_hash = hash_password(body.password)
+        target.password_hash = hash_password(body.password)
+        target.token_version += 1
     if body.first_name is not None:
-        user.first_name = body.first_name
+        target.first_name = body.first_name
     if body.last_name is not None:
-        user.last_name = body.last_name
+        target.last_name = body.last_name
     if body.active is not None:
-        user.active = body.active
+        target.active = body.active
+        if not body.active:
+            target.token_version += 1
     if body.role_codes is not None:
-        _apply_roles(db, user, body.role_codes)
+        _apply_roles(db, target, body.role_codes)
     try:
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="El email ya esta en uso")
-    db.refresh(user)
-    return _user_out(user)
+    db.refresh(target)
+    return _user_out(target)
 
 
 @router.delete("/users/{user_id}", status_code=204)
-def delete_user(user_id: str, _: User = Depends(admin_users), db: Session = Depends(get_db)):
-    user = _get_user_by_id(db, user_id)
-    db.delete(user)
+def delete_user(user_id: str, user: User = Depends(admin_users), db: Session = Depends(get_db)):
+    target = _get_user_by_id(db, user_id)
+    if target.id == user.id:
+        raise HTTPException(status_code=400, detail="No puede eliminarse a si mismo")
+    db.delete(target)
     db.commit()
 
 

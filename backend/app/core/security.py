@@ -28,13 +28,17 @@ def verify_password(password: str, password_hash: str) -> bool:
 # --- JWT --------------------------------------------------------------------
 
 
-def create_access_token(user_id: uuid.UUID, username: str, expires_minutes: int | None = None) -> str:
+def create_access_token(
+    user_id: uuid.UUID, username: str, expires_minutes: int | None = None, version: int = 0
+) -> str:
     expire = datetime.now(timezone.utc) + timedelta(
         minutes=expires_minutes or settings.jwt_expire_minutes
     )
     payload = {
         "sub": str(user_id),
         "username": username,
+        "jti": str(uuid.uuid4()),
+        "version": version,
         "exp": expire,
         "iat": datetime.now(timezone.utc),
     }

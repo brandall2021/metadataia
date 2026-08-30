@@ -1,11 +1,15 @@
 """Rutas de autenticacion (FASE 3): login, refresh, logout y /me."""
 
+import uuid
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.audit.service import audit_log, request_context
 from app.auth.schemas import LoginRequest, TokenResponse, UserMe
+from app.auth.session import revoke_token, token_is_revoked
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import security, get_current_user
@@ -16,7 +20,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _token_response(user: User) -> TokenResponse:
-    token = create_access_token(user.id, user.username)
+    token = create_access_token(user.id, user.username, version=user.token_version)
     return TokenResponse(
         access_token=token,
         expires_in=settings.jwt_expire_minutes * 60,
@@ -44,29 +48,36 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)) -
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh(
+def refresh(user: User = Depends(get_current_user)) -> TokenResponse:
+    return _token_response(user)
+
+
+@router.post("/logout")
+def logout(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
-) -> TokenResponse:
+    db: Session = Depends(get_db),
+):
     if credentials is None:
         raise HTTPException(status_code=401, detail="No autenticado")
     try:
         payload = decode_token(credentials.credentials)
     except Exception:
         raise HTTPException(status_code=401, detail="Token invalido o expirado")
-    token = create_access_token(
-        payload["sub"], payload.get("username", ""), expires_minutes=None
-    )
-    return TokenResponse(
-        access_token=token,
-        expires_in=settings.jwt_expire_minutes * 60,
-    )
-
-
-@router.post("/logout")
-def logout(credentials: HTTPAuthorizationCredentials | None = Depends(security)):
-    if credentials is None:
-        raise HTTPException(status_code=401, detail="No autenticado")
-    # JWT stateless: el cliente descarta el token. Revocacion real en FASE 17.
+    if payload.get("jti") and not token_is_revoked(db, payload.get("jti")):
+        user = db.get(User, uuid.UUID(payload["sub"])) if payload.get("sub") else None
+        if user is not None:
+            revoke_token(db, payload["jti"], user.id, datetime.fromtimestamp(payload["exp"], tz=timezone.utc))
+            audit_log(
+                db,
+                user=user,
+                action="auth.logout",
+                entity_type="user",
+                entity_id=str(user.id),
+                new_value={"username": user.username},
+                **request_context(request),
+            )
+        db.commit()
     return {"message": "Sesion cerrada"}
 
 

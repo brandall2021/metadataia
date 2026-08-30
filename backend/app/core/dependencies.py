@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.auth.session import token_is_revoked
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models import User
@@ -18,7 +19,11 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
-    """Obtiene el usuario autenticado a partir del Bearer token."""
+    """Obtiene el usuario autenticado a partir del Bearer token.
+
+    FASE 17: rechaza tokens revocados (logout) o emitidos con una version
+    anterior (cambio de password / desactivacion).
+    """
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -33,12 +38,23 @@ def get_current_user(
             detail="Token invalido o expirado",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if token_is_revoked(db, payload.get("jti")):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token revocado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     user_id = payload.get("sub")
     if user_id is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token invalido")
     user = db.get(User, uuid.UUID(user_id))
     if user is None or not user.active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario inactivo")
+    if int(payload.get("version") or 0) != user.token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sesion invalida, vuelva a iniciar sesion",
+        )
     return user
 
 

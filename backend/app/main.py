@@ -1,4 +1,4 @@
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -20,8 +20,31 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.users.router import router as users_router
 
+# Defaults de desarrollo: en produccion el arranque debe fallar si se conservan.
+DEV_DEFAULTS = {
+    "jwt_secret": "clave-jwt-desarrollo-metadataia-32-caracteres-minimo",
+    "app_secret_key": "clave-desarrollo-metadataia-32-caracteres-minimo",
+}
+
+_DEV_CORS = {"", "*", "http://localhost:3000", "http://127.0.0.1:3000"}
+
+
+def _ensure_production_guard() -> None:
+    """FASE 17: en APP_ENV=production no se admiten secretos ni CORS de desarrollo."""
+    if settings.app_env != "production":
+        return
+    if settings.jwt_secret in DEV_DEFAULTS.values() or settings.app_secret_key in DEV_DEFAULTS.values():
+        raise RuntimeError(
+            "APP_ENV=production requiere JWT_SECRET y APP_SECRET_KEY propios (no los defaults de desarrollo)"
+        )
+    if settings.cors_origins in _DEV_CORS:
+        raise RuntimeError(
+            "APP_ENV=production requiere cors_origins restringido (no se admite el default de desarrollo)"
+        )
+
 
 def create_app() -> FastAPI:
+    _ensure_production_guard()
     storage.ensure_bucket()
     app = FastAPI(
         title=settings.app_name,
@@ -37,6 +60,15 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "same-origin"
+        response.headers["X-XSS-Protection"] = "0"
+        return response
 
     app.include_router(auth_router, prefix="/api")
     app.include_router(users_router, prefix="/api")

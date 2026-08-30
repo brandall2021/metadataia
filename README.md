@@ -12,7 +12,7 @@ Todo se administra desde el panel y se persiste en base de datos — **no se har
 |---|---|
 | Repositorio | https://github.com/brandall2021/metadataia |
 | Documentación | `docs/` (SPECIFICATION, ARCHITECTURE, y por dominio) |
-| Estado | ✅ F1–F16 completadas · FASE 17 (seguridad) en curso |
+| Estado | ✅ F1–F17 completadas · FASE 18 (despliegue) en curso |
 
 ---
 
@@ -148,6 +148,15 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 - **Permisos y estados**: 401 sin token, 403 para el revisor (auditoría/repos) con `dashboard.view` permitido, 409 al depositar sin aprobar, deposit task ERROR.
 - **OCR real**: PDF escaneado en blanco → detección `needs_ocr` → `run_ocr` con Tesseract real (`--skip-text`) → job y páginas marcadas + auditoría `ocr.completed` (skip si no hay herramientas).
 - Los mock servers aceptan el puerto como argumento opcional (default 9999/9998); el contenedor api monta `scripts/` para poder ejecutarlos.
+
+### Seguridad (FASE 17)
+- **Revocación de sesiones** (`backend/app/auth/session.py` + tabla `revoked_tokens` + `users.token_version`): los JWT llevan `jti` y `version`; `POST /api/auth/logout` registra el `jti` en la lista de revocados y todo endpoint autenticado lo rechaza (401). Un cambio de password o la desactivación de un usuario incrementa su `token_version`, invalidando todos los tokens emitidos con anterioridad. `POST /api/auth/refresh` ahora exige usuario autenticado, activo y no revocado.
+- **Cabeceras de seguridad**: middleware que agrega `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` y `Referrer-Policy: same-origin` a todas las respuestas.
+- **Guarda de producción**: con `APP_ENV=production` el arranque falla si se conservan `JWT_SECRET`/`APP_SECRET_KEY` de desarrollo o el CORS por defecto (no se puede desplegar con credenciales conocidas).
+- **Subida de archivos**: el upload lee con límite explícito (413 si excede el máximo, sin cargar el archivo completo en memoria) y el nombre original se sanea (se eliminan `\r`, `\n`, comillas y caracteres de control) antes de usarse en `Content-Disposition` (evita inyección de cabeceras en la descarga).
+- **Auto-bloqueo de administradores**: un admin no puede desactivarse, eliminarse ni quitarse el rol `ADMIN` a sí mismo.
+- **Aislamiento de prompts**: el texto del documento solo ocupa el placeholder `{{document_text}}` del prompt de usuario; el prompt de sistema es fijo (verificado con test) y no puede ser reescrito por el contenido del PDF.
+- **Auditado sin cambios**: CORS configurado, MIME/extension y contenido real del PDF validados, claves de storage derivadas de SHA-256 (sin path traversal), API keys de proveedores e IA y credenciales de repositorios siempre enmascaradas/cifradas (Fernet), auditoría sin secretos, errores 500 sin detalles internos. En producción se recomienda rate limiting y TLS en el proxy (FASE 18).
 
 ### Frontend de administración
 - `/login`: autenticación.
@@ -324,14 +333,14 @@ make test                    # dentro del contenedor api (instala editable si fa
 docker compose exec api pytest tests/test_ai_agents.py -q   # un grupo
 ```
 
-Estado actual: **187 tests en verde** (smoke, auth, users, ai_admin, agents, metadata, pdf, ocr, extraction, normalization, validation, review, dspace, audit, dashboard, e2e). Los endpoints externos (IA, DSpace) se simulan con `httpx.MockTransport`; el motor OCR se prueba con mocks deterministas y en vivo contra Tesseract real. La suite **e2e** (`backend/tests/test_e2e.py`) arranca los mock servers reales como subprocesos en puertos libres y ejecuta el pipeline completo por HTTP real (extracción IA y depósito DSpace sin monkeypatch); `scripts/mock_ai_server.py` y `scripts/mock_dspace_server.py` aceptan el puerto como argumento opcional y también permiten probar de extremo a extremo desde Docker.
+Estado actual: **201 tests en verde** (smoke, auth, users, ai_admin, agents, metadata, pdf, ocr, extraction, normalization, validation, review, dspace, audit, dashboard, security, e2e). Los endpoints externos (IA, DSpace) se simulan con `httpx.MockTransport`; el motor OCR se prueba con mocks deterministas y en vivo contra Tesseract real. La suite **e2e** (`backend/tests/test_e2e.py`) arranca los mock servers reales como subprocesos en puertos libres y ejecuta el pipeline completo por HTTP real (extracción IA y depósito DSpace sin monkeypatch); `scripts/mock_ai_server.py` y `scripts/mock_dspace_server.py` aceptan el puerto como argumento opcional y también permiten probar de extremo a extremo desde Docker. La suite **security** (`backend/tests/test_security.py`, 14 tests) cubre revocación de tokens (logout, refresh, cambio de password, desactivación), cabeceras de seguridad, guarda de producción, sanitizado de nombres de archivo, límite de upload y auto-bloqueo de administradores.
 
 ---
 
 ## 13. Roadmap
 
-- **Completadas**: F1–F16 — autenticación, usuarios, IA, metadatos, PDF, OCR, extracción, normalización, validación, revisión, DSpace, auditoría, dashboard y tests e2e.
-- **Siguientes**: seguridad (17) → producción (18).
+- **Completadas**: F1–F17 — autenticación, usuarios, IA, metadatos, PDF, OCR, extracción, normalización, validación, revisión, DSpace, auditoría, dashboard, tests e2e y seguridad.
+- **Siguientes**: producción (18).
 
 ---
 

@@ -6,6 +6,7 @@ El archivo original nunca se modifica.
 """
 
 import io
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -27,6 +28,14 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 
 can_upload = require_permission("document.upload")
 can_view = require_permission("document.view")
+
+_UNSAFE_FILENAME_CHARS = re.compile(r'[\r\n"\x00-\x1f\x7f\\]')
+
+
+def _safe_filename(filename: str) -> str:
+    """Sanea el nombre para usarlo en Content-Disposition (FASE 17)."""
+    cleaned = _UNSAFE_FILENAME_CHARS.sub("", filename or "").strip()
+    return cleaned or "documento.pdf"
 
 
 def _page_out(page: DocumentPage) -> DocumentPageOut:
@@ -98,7 +107,7 @@ def upload_document(
     db: Session = Depends(get_db),
     user: User = Depends(can_upload),
 ):
-    filename = file.filename or ""
+    filename = _safe_filename(file.filename or "")
 
     if not analyzer.is_valid_extension(filename):
         raise HTTPException(status_code=422, detail="Solo se aceptan archivos PDF (.pdf)")
@@ -106,10 +115,11 @@ def upload_document(
     if not analyzer.is_valid_pdf_mime(content_type) and content_type != "application/octet-stream":
         raise HTTPException(status_code=422, detail="El MIME del archivo debe ser application/pdf")
 
-    data = file.file.read()
+    max_bytes = analyzer.max_upload_bytes()
+    data = file.file.read(max_bytes + 1)
     if not data:
         raise HTTPException(status_code=422, detail="El archivo esta vacio")
-    if len(data) > analyzer.max_upload_bytes():
+    if len(data) > max_bytes:
         raise HTTPException(
             status_code=413, detail=f"Excede el tamano maximo de {settings.default_max_file_size_mb} MB"
         )
@@ -243,7 +253,7 @@ def download_document(document_id: str, db: Session = Depends(get_db), _: User =
         content = storage.download_original(doc.storage_path)
     except StorageError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
-    filename = doc.original_filename or f"{doc.sha256 or doc.id}.pdf"
+    filename = _safe_filename(doc.original_filename or f"{doc.sha256 or doc.id}.pdf")
     return Response(
         content=content,
         media_type="application/pdf",
