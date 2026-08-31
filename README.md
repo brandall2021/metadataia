@@ -171,6 +171,8 @@ Plan de 18 fases (spec §41). Avance incremental con criterio de aceptación por
 - `/admin`: navegación con guard de sesión.
 - `/admin/dashboard`: dashboard de estadísticas del sistema.
 - `/admin/metadata`: lista de campos y formulario de creación dinámico.
+- `/admin/ai`: agentes de extracción IA (alta con modelo/tipo documental/prompts, activar/desactivar, eliminar).
+- `/admin/repositories`: repositorios DSpace (alta con URL/autenticación/credencial cifrada, sincronización de comunidades/colecciones y asociación de tipos documentales).
 - `/admin/audit`: consulta de auditoría con filtros y paginación.
 
 ---

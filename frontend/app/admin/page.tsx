@@ -58,19 +58,34 @@ export default function AdminHome() {
             </Link>
           </CardContent>
         </Card>
-        {["Agentes IA", "Repositorios"].map((title) => (
-          <Card key={title}>
-            <CardHeader>
-              <CardTitle>{title}</CardTitle>
-              <CardDescription>Disponible en próximas fases.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button variant="outline" disabled>
-                En construcción
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
+        <Card>
+          <CardHeader>
+            <CardTitle>Agentes IA</CardTitle>
+            <CardDescription>
+              Agentes de extracción de metadatos, cada uno ligado a un modelo y
+              un tipo documental con prompts y versionado.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/admin/ai">
+              <Button variant="outline">Ir a Agentes IA</Button>
+            </Link>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Repositorios</CardTitle>
+            <CardDescription>
+              Repositorios DSpace: URL, autenticación, sincronización de
+              comunidades/colecciones y asociación de tipos documentales.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/admin/repositories">
+              <Button variant="outline">Ir a Repositorios</Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
