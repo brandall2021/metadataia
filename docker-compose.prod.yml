@@ -140,7 +140,11 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.prod
       args:
-        NEXT_PUBLIC_API_URL: https://${DOMAIN:?Defina DOMAIN en .env (p. ej. miapp.dominio.gob.ar)}/api
+        # SIN /api al final: las llamadas a apiFetch ya incluyen /api en su
+        # path (apiFetch("/api/...")), y el rewrite de Next enruta /api -> api.
+        # Si este valor terminara en /api, la URL final duplicaria el segmento
+        # (/api/api/...) y el login devolveria 404.
+        NEXT_PUBLIC_API_URL: https://${DOMAIN:?Defina DOMAIN en .env (p. ej. miapp.dominio.gob.ar)}
         API_INTERNAL_URL: http://api:8000
     environment:
       # Rewrite /api -> backend dentro de la red del stack (Dokploy: misma
