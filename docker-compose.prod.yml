@@ -32,6 +32,9 @@ services:
       PGUSER: ${DB_USER:?Defina DB_USER (postgres externo)}
       PGPASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD (postgres externo)}
     command: ["/bin/sh", "-c", "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='repositorio'\" | grep -q 1 || psql -c 'CREATE DATABASE repositorio'"]
+    networks:
+      - default
+      - dokploy
 
   migrate:
     build: ./backend
@@ -41,6 +44,9 @@ services:
     depends_on:
       db-init:
         condition: service_completed_successfully
+    networks:
+      - default
+      - dokploy
 
   minio:
     image: minio/minio:latest
@@ -80,6 +86,9 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+    networks:
+      - default
+      - dokploy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
@@ -103,6 +112,9 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+    networks:
+      - default
+      - dokploy
 
   frontend:
     build:
@@ -119,6 +131,14 @@ services:
       - "${FRONTEND_PORT:-3001}:3000"
     depends_on:
       - api
+
+networks:
+  default: {}
+  # Red publica de Dokploy: permite que los servicios del stack lleguen a
+  # los servicios externos compartidos (basededato-6cfbai, diarionoticia-redis-adtycq).
+  dokploy:
+    external: true
+    name: dokploy-network
 
 volumes:
   minio_data:
