@@ -1,10 +1,12 @@
 "use client";
 
-// Si no se define NEXT_PUBLIC_API_URL, se usa el mismo origen con /api
-// (produccion: el proxy de Dokploy enruta /api hacia el backend).
+// Si no se define NEXT_PUBLIC_API_URL, se usa el mismo origen. Las llamadas a
+// apiFetch ya incluyen el prefijo /api en su path (p.ej. apiFetch("/api/auth/...")),
+// y el proxy/rewrite de Next enruta /api hacia el backend (ver next.config.ts).
+// No agregar "/api" aqui para evitar duplicarlo (origin + /api + /api == 404).
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL ??
-  (typeof window !== "undefined" ? `${window.location.origin}/api` : "/api");
+  (typeof window !== "undefined" ? window.location.origin : "");
 
 const TOKEN_KEY = "metadataia_token";
 
