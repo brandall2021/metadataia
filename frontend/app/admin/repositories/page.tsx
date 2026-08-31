@@ -1,6 +1,15 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Database,
+  Plus,
+  Power,
+  RefreshCw,
+  Trash2,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +44,24 @@ type Collection = {
 };
 type DocType = { id: string; name: string; code: string };
 type SyncOut = { repository_id: string; communities: number; collections: number };
+
+const inputCls =
+  "w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus:border-ring focus:bg-muted/50 focus:ring-2 focus:ring-ring/30";
+
+function StatusBadge({ active }: { active: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+        active
+          ? "bg-emerald-500/15 text-emerald-500"
+          : "bg-muted text-muted-foreground"
+      }`}
+    >
+      <span className={`size-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-muted-foreground/60"}`} />
+      {active ? "Activo" : "Inactivo"}
+    </span>
+  );
+}
 
 export default function RepositoriesPage() {
   const [repos, setRepos] = useState<Repository[]>([]);
@@ -190,67 +217,83 @@ export default function RepositoriesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Repositorios</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+          <Database className="size-6 text-primary" />
+          Repositorios
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Configuración de repositorios DSpace (URL, autenticación), sincronización
           de comunidades/colecciones y asociación de tipos documentales.
         </p>
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && (
+        <p
+          className={`rounded-lg border px-3 py-2 text-sm ${
+            error.startsWith("Sincronizados")
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500"
+              : "border-destructive/30 bg-destructive/10 text-destructive"
+          }`}
+        >
+          {error}
+        </p>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card>
+        <Card className="h-fit">
           <CardHeader>
-            <CardTitle>Nuevo repositorio</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Plus className="size-4" />
+              Nuevo repositorio
+            </CardTitle>
             <CardDescription>
               La credencial se cifra y solo se muestra enmascarada.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreate} className="flex flex-col gap-3 text-sm">
-              <label className="flex flex-col gap-1">
-                Nombre
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground">Nombre</span>
                 <input
-                  className="rounded-lg border border-border bg-background px-3 py-2"
+                  className={inputCls}
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="SEDICI"
                   required
                 />
               </label>
-              <label className="flex flex-col gap-1">
-                Código
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground">Código</span>
                 <input
-                  className="rounded-lg border border-border bg-background px-3 py-2"
+                  className={inputCls}
                   value={form.code}
                   onChange={(e) => setForm({ ...form, code: e.target.value })}
                   placeholder="sedici"
                   required
                 />
               </label>
-              <label className="flex flex-col gap-1">
-                URL pública
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground">URL pública</span>
                 <input
-                  className="rounded-lg border border-border bg-background px-3 py-2"
+                  className={inputCls}
                   value={form.base_url}
                   onChange={(e) => setForm({ ...form, base_url: e.target.value })}
                   placeholder="https://repo.example.gob.ar"
                 />
               </label>
-              <label className="flex flex-col gap-1">
-                URL de API
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground">URL de API</span>
                 <input
-                  className="rounded-lg border border-border bg-background px-3 py-2"
+                  className={inputCls}
                   value={form.api_url}
                   onChange={(e) => setForm({ ...form, api_url: e.target.value })}
                   placeholder="https://repo.example.gob.ar/server/api"
                 />
               </label>
-              <label className="flex flex-col gap-1">
-                Tipo de autenticación
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground">Tipo de autenticación</span>
                 <select
-                  className="rounded-lg border border-border bg-background px-3 py-2"
+                  className={inputCls}
                   value={form.authentication_type}
                   onChange={(e) => setForm({ ...form, authentication_type: e.target.value })}
                 >
@@ -259,61 +302,65 @@ export default function RepositoriesPage() {
                   <option value="token">Token</option>
                 </select>
               </label>
-              <label className="flex flex-col gap-1">
-                Usuario
-                <input
-                  className="rounded-lg border border-border bg-background px-3 py-2"
-                  value={form.username}
-                  onChange={(e) => setForm({ ...form, username: e.target.value })}
-                  placeholder="usuario"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                Credencial
-                <input
-                  type="password"
-                  className="rounded-lg border border-border bg-background px-3 py-2"
-                  value={form.credential}
-                  onChange={(e) => setForm({ ...form, credential: e.target.value })}
-                  placeholder="password / token"
-                />
-              </label>
-              <Button type="submit" disabled={saving}>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">Usuario</span>
+                  <input
+                    className={inputCls}
+                    value={form.username}
+                    onChange={(e) => setForm({ ...form, username: e.target.value })}
+                    placeholder="usuario"
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">Credencial</span>
+                  <input
+                    type="password"
+                    className={inputCls}
+                    value={form.credential}
+                    onChange={(e) => setForm({ ...form, credential: e.target.value })}
+                    placeholder="password"
+                  />
+                </label>
+              </div>
+              <Button type="submit" disabled={saving} className="mt-1">
                 {saving ? "Creando…" : "Crear repositorio"}
               </Button>
             </form>
           </CardContent>
         </Card>
 
-        <div className="lg:col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-3">
           {repos.map((repo) => {
             const open = expanded === repo.id;
             return (
-              <div key={repo.id} className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
-                <div className="flex items-center justify-between gap-3 px-4 py-3">
+              <div
+                key={repo.id}
+                className="overflow-hidden rounded-xl ring-1 ring-foreground/10 transition-colors"
+              >
+                <div className="flex items-center gap-3 px-4 py-3">
                   <button
-                    className="flex flex-1 items-center gap-3 text-left"
+                    className="flex flex-1 items-center gap-3 rounded-lg p-1 text-left transition-colors hover:bg-muted/40"
                     onClick={() => toggleExpand(repo.id)}
                   >
+                    {open ? (
+                      <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                    )}
                     <div className="flex-1">
-                      <div className="font-medium">{repo.name}</div>
-                      <div className="text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 font-medium">
+                        {repo.name}
+                        <StatusBadge active={repo.active} />
+                      </div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">
                         {repo.code}
                         {repo.base_url ? ` · ${repo.base_url}` : ""}
                         {repo.username ? ` · ${repo.username}` : ""}
                       </div>
                     </div>
-                    <span
-                      className={
-                        repo.active
-                          ? "rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-600"
-                          : "rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-                      }
-                    >
-                      {repo.active ? "Activo" : "Inactivo"}
-                    </span>
                   </button>
-                  <div className="flex items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-1">
                     {repo.active && (
                       <Button
                         variant="outline"
@@ -321,18 +368,27 @@ export default function RepositoriesPage() {
                         disabled={busy === `sync:${repo.id}`}
                         onClick={() => sync(repo)}
                       >
-                        {busy === `sync:${repo.id}` ? "Sincronizando…" : "Sincronizar"}
+                        <RefreshCw
+                          className={busy === `sync:${repo.id}` ? "animate-spin" : ""}
+                        />
+                        {busy === `sync:${repo.id}` ? "Sincronizando" : "Sincronizar"}
                       </Button>
                     )}
                     <Button
-                      variant="outline"
-                      size="sm"
+                      variant="ghost"
+                      size="icon-sm"
+                      title={repo.active ? "Desactivar" : "Activar"}
                       onClick={() => toggleRepo(repo, !repo.active)}
                     >
-                      {repo.active ? "Desactivar" : "Activar"}
+                      <Power />
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => deleteRepo(repo)}>
-                      Eliminar
+                    <Button
+                      variant="destructive"
+                      size="icon-sm"
+                      title="Eliminar"
+                      onClick={() => deleteRepo(repo)}
+                    >
+                      <Trash2 />
                     </Button>
                   </div>
                 </div>
@@ -343,23 +399,23 @@ export default function RepositoriesPage() {
                       <table className="w-full text-sm">
                         <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
                           <tr>
-                            <th className="px-3 py-2">Colección</th>
-                            <th className="px-3 py-2">Handle</th>
-                            <th className="px-3 py-2">Tipo documental</th>
+                            <th className="px-4 py-3 font-medium">Colección</th>
+                            <th className="px-4 py-3 font-medium">Handle</th>
+                            <th className="px-4 py-3 font-medium">Tipo documental</th>
                           </tr>
                         </thead>
                         <tbody>
                           {(cols[repo.id] ?? []).map((c) => (
-                            <tr key={c.id} className="border-t">
-                              <td className="px-3 py-2">
+                            <tr key={c.id} className="border-t transition-colors hover:bg-muted/30">
+                              <td className="px-4 py-2.5">
                                 {c.name ?? c.external_id ?? "—"}
                               </td>
-                              <td className="px-3 py-2 font-mono text-xs">
+                              <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">
                                 {c.handle ?? "—"}
                               </td>
-                              <td className="px-3 py-2">
+                              <td className="px-4 py-2.5">
                                 <select
-                                  className="rounded-lg border border-border bg-background px-2 py-1 text-sm"
+                                  className="rounded-lg border border-border bg-muted/30 px-2 py-1 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30"
                                   value={c.document_type_id ?? ""}
                                   disabled={busy === `col:${c.id}`}
                                   onChange={(e) => setCollectionType(c, e.target.value)}
@@ -378,7 +434,7 @@ export default function RepositoriesPage() {
                             <tr>
                               <td
                                 colSpan={3}
-                                className="px-3 py-6 text-center text-muted-foreground"
+                                className="px-4 py-6 text-center text-muted-foreground"
                               >
                                 Sin colecciones. Pulse «Sincronizar» para traerlas de DSpace.
                               </td>
@@ -393,8 +449,11 @@ export default function RepositoriesPage() {
             );
           })}
           {repos.length === 0 && (
-            <div className="rounded-xl ring-1 ring-foreground/10 p-8 text-center text-muted-foreground">
-              Sin repositorios todavía. Cree el primero con el formulario.
+            <div className="rounded-xl ring-1 ring-foreground/10 p-10 text-center">
+              <Database className="mx-auto mb-2 size-8 opacity-40" />
+              <p className="text-sm text-muted-foreground">
+                Sin repositorios todavía. Cree el primero con el formulario.
+              </p>
             </div>
           )}
         </div>
