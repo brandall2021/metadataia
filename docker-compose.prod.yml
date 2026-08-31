@@ -22,11 +22,25 @@ name: metadato-prod
 # ====================================================================
 
 services:
+  # Crea la base de datos 'repositorio' en el PostgreSQL externo compartido
+  # si aun no existe (idempotente). El usuario necesita permiso CREATEDB.
+  db-init:
+    image: postgres:16-alpine
+    environment:
+      PGHOST: ${DB_HOST:?Defina DB_HOST (postgres externo)}
+      PGPORT: ${DB_PORT:-5432}
+      PGUSER: ${DB_USER:?Defina DB_USER (postgres externo)}
+      PGPASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD (postgres externo)}
+    command: ["/bin/sh", "-c", "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='repositorio'\" | grep -q 1 || psql -c 'CREATE DATABASE repositorio'"]
+
   migrate:
     build: ./backend
     command: alembic upgrade head
     environment:
       DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL en las env vars del servicio}
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
 
   minio:
     image: minio/minio:latest
