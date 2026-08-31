@@ -5,10 +5,17 @@ name: metadato-prod
 #
 # Pensado para deploy en Dokploy (genera el proxy/HTTPS del dominio).
 # NO publica secretos por defecto: falta el .env y falla el arranque.
-# Todos los secretos y el dominio se toman del .env:
+# Todos los secretos y el dominio se toman del .env / env vars de Dokploy:
 #   DOMAIN=miapp.dominio.gob.ar        (subdominio/dominio de Dokploy)
-#   POSTGRES_PASSWORD=... APP_SECRET_KEY=... JWT_SECRET=...
+#   DATABASE_URL=... REDIS_URL=...     (servicios externos compartidos)
+#   APP_SECRET_KEY=... JWT_SECRET=...
 #   MINIO_ACCESS_KEY=... MINIO_SECRET_KEY=...
+#
+# PostgreSQL y Redis son SERVICIOS EXTERNOS compartidos (se reutiliza la
+# infra ya desplegada en Dokploy): DATABASE_URL apunta a basededato-6cfbai
+# y REDIS_URL a diarionoticia-redis-adtycq. Por eso no se definen aqui
+# servicios postgres/redis propios. Minio sigue siendo interno (almacena
+# los binarios/PDFs de metadataia).
 #
 # El proyecto usa nombre propio "metadato-prod" para convivir con el
 # stack de desarrollo sin colisionar nombres de contenedores.
@@ -19,42 +26,7 @@ services:
     build: ./backend
     command: alembic upgrade head
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-metadataia}:${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD en .env}@postgres:5432/${POSTGRES_DB:-metadataia}
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  postgres:
-    image: postgres:16-alpine
-    # En hosts con kernel < 4.8 (p. ej. CentOS 7, kernel 3.10) el seccomp
-    # por defecto de Docker bloquea un syscall de Postgres (EPERM al
-    # escribir postmaster.pid / pg_wal). Se deja ACTIVO porque es
-    # inofensivo en kernels modernos y requerido en los antiguos.
-    security_opt:
-      - seccomp:unconfined
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-metadataia}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD en .env}
-      POSTGRES_DB: ${POSTGRES_DB:-metadataia}
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    ports:
-      - "${POSTGRES_PORT:-5433}:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-metadataia} -d ${POSTGRES_DB:-metadataia}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "${REDIS_PORT:-6380}:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL en las env vars del servicio}
 
   minio:
     image: minio/minio:latest
@@ -71,8 +43,8 @@ services:
   api:
     build: ./backend
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-metadataia}:${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD en .env}@postgres:5432/${POSTGRES_DB:-metadataia}
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL en las env vars del servicio}
+      REDIS_URL: ${REDIS_URL:?Defina REDIS_URL en las env vars del servicio}
       APP_ENV: production
       APP_SECRET_KEY: ${APP_SECRET_KEY:?Defina APP_SECRET_KEY en .env}
       JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET en .env}
@@ -94,10 +66,6 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
@@ -108,8 +76,8 @@ services:
     build: ./backend
     command: celery -A app.jobs.celery_app worker --loglevel=info
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-metadataia}:${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD en .env}@postgres:5432/${POSTGRES_DB:-metadataia}
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL en las env vars del servicio}
+      REDIS_URL: ${REDIS_URL:?Defina REDIS_URL en las env vars del servicio}
       APP_ENV: production
       APP_SECRET_KEY: ${APP_SECRET_KEY:?Defina APP_SECRET_KEY en .env}
       JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET en .env}
@@ -121,10 +89,6 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
 
   frontend:
     build:
@@ -143,5 +107,4 @@ services:
       - api
 
 volumes:
-  pg_data:
   minio_data:
