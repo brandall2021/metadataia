@@ -48,6 +48,25 @@ services:
       - default
       - dokploy
 
+  # Crea o actualiza el usuario administrador (idempotente). Credenciales
+  # desde env vars (ADMIN_EMAIL / ADMIN_PASSWORD / ...) sin exponerse en el repo.
+  admin-init:
+    build: ./backend
+    command: python -m app.create_admin
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL en las env vars del servicio}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Defina ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Defina ADMIN_PASSWORD}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_FIRST_NAME: ${ADMIN_FIRST_NAME:-Administrador}
+      ADMIN_LAST_NAME: ${ADMIN_LAST_NAME:-Sistema}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - default
+      - dokploy
+
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
