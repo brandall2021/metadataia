@@ -13,11 +13,48 @@ from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
 from app.core.security import hash_password
-from app.models import Role, User
-from app.models.user import user_roles
+from app.models import Permission, Role, User
+from app.models.user import role_permissions, user_roles
+
+from app.seed import PERMISSIONS, ROLE_PERMISSIONS
+
+
+def _ensure_permissions(db: Session) -> dict[str, Permission]:
+    perm_by_code: dict[str, Permission] = {}
+    for code, description in PERMISSIONS:
+        perm = db.query(Permission).filter_by(code=code).one_or_none()
+        if perm is None:
+            perm = Permission(code=code, description=description)
+            db.add(perm)
+        else:
+            perm.description = description
+        perm_by_code[code] = perm
+    db.flush()
+    return perm_by_code
+
+
+def _sync_role_permissions(db: Session, role: Role, perm_by_code: dict[str, Permission]) -> None:
+    desired = {perm_by_code[code].id for code in ROLE_PERMISSIONS[role.name]}
+    current = {
+        pid
+        for (pid,) in db.query(role_permissions.c.permission_id).filter(
+            role_permissions.c.role_id == role.id
+        )
+    }
+    for pid in desired - current:
+        db.execute(role_permissions.insert().values(role_id=role.id, permission_id=pid))
+    for pid in current - desired:
+        db.execute(
+            role_permissions.delete().where(
+                role_permissions.c.role_id == role.id,
+                role_permissions.c.permission_id == pid,
+            )
+        )
 
 
 def run(db: Session) -> None:
+    perm_by_code = _ensure_permissions(db)
+
     email = os.environ["ADMIN_EMAIL"]
     password = os.environ["ADMIN_PASSWORD"]
     username = os.environ.get("ADMIN_USERNAME", "admin")
@@ -29,6 +66,8 @@ def run(db: Session) -> None:
         role = Role(name="ADMIN", description="Administrador del sistema con acceso total.")
         db.add(role)
         db.flush()
+
+    _sync_role_permissions(db, role, perm_by_code)
 
     user = (
         db.query(User)
