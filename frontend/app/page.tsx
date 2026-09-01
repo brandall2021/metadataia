@@ -6,6 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import Link from "next/link";
 
 export default function Home() {
   return (
@@ -44,6 +45,14 @@ export default function Home() {
                 <a href="/admin">
                   <Button variant="outline">Abrir</Button>
                 </a>
+              ) : item.title === "Revisión" ? (
+                <Link href="/review">
+                  <Button variant="outline">Abrir</Button>
+                </Link>
+              ) : item.title === "Documentos" ? (
+                <Link href="/documents">
+                  <Button variant="outline">Abrir</Button>
+                </Link>
               ) : (
                 <Button variant="outline" disabled>
                   En construcción
