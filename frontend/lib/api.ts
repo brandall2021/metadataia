@@ -45,3 +45,28 @@ export async function apiFetch<T>(
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
+
+export async function apiFetchBlob(
+  path: string,
+  options: RequestInit = {},
+): Promise<{ blob: Blob; filename: string | null }> {
+  const headers: Record<string, string> = {
+    ...(options.headers as Record<string, string>),
+  };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  if (res.status === 401) {
+    setToken(null);
+    if (typeof window !== "undefined") window.location.href = "/login";
+    throw new Error("Sesión expirada");
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail ?? `Error ${res.status}`);
+  }
+  const disposition = res.headers.get("content-disposition") ?? "";
+  const match = disposition.match(/filename="?([^";]+)"?/i);
+  return { blob: await res.blob(), filename: match?.[1] ?? null };
+}

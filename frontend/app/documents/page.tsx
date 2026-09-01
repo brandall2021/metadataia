@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
-import Link from "next/link";
 import {
   ArrowRight,
   CheckCircle2,
@@ -26,7 +25,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { apiFetch, API_URL, getToken } from "@/lib/api";
+import { apiFetch, apiFetchBlob, API_URL, getToken } from "@/lib/api";
 import * as documentHelpers from "@/lib/documents";
 
 type DocumentListItem = {
@@ -325,6 +324,25 @@ export default function DocumentsPage() {
     }
   }
 
+  async function downloadDocument() {
+    if (!selectedDoc) return;
+    setError(null);
+    try {
+      const { blob, filename } = await apiFetchBlob(`/api/documents/${selectedDoc.id}/download`);
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename ?? selectedDoc.original_filename ?? `${selectedDoc.id}.pdf`;
+      anchor.rel = "noreferrer";
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo descargar el documento");
+    }
+  }
+
   const canRequestOcr = documentHelpers.documentCanRequestOcr(selectedDoc);
   const canRequestExtraction = documentHelpers.documentCanRequestExtraction(selectedDoc);
   const canRequestNormalization = documentHelpers.documentCanRequestNormalization(view?.metadata);
@@ -504,12 +522,10 @@ export default function DocumentsPage() {
                       <RefreshCw className="size-4" />
                       Refrescar
                     </Button>
-                    <Link href={`${API_URL}/api/documents/${selectedDoc.id}/download`} target="_blank" rel="noreferrer">
-                      <Button variant="outline" size="sm" className="gap-2">
-                        <Download className="size-4" />
-                        Descargar
-                      </Button>
-                    </Link>
+                    <Button variant="outline" size="sm" className="gap-2" onClick={() => void downloadDocument()}>
+                      <Download className="size-4" />
+                      Descargar
+                    </Button>
                     <Button variant="outline" size="sm" disabled={!canRequestOcr} onClick={() => void requestAction("ocr")} className="gap-2">
                       <ScanSearch className="size-4" />
                       OCR
