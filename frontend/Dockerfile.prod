@@ -1,12 +1,15 @@
 # Imagen de PRODUCCION del frontend (FASE 18): build + servidor Next.
-# NEXT_PUBLIC_API_URL (dominio publico del browser) y API_INTERNAL_URL
-# (destino interno del rewrite /api) se hornean en el build via args.
+# API_INTERNAL_URL (destino interno del rewrite /api) se hornea en el build via args.
+# NEXT_PUBLIC_API_URL es OPCIONAL: si se omite, el navegador usa el mismo origen
+# (window.location.origin) y el rewrite de Next resuelve /api -> backend. Esto
+# evita que un dominio vencido o distinto en el env rompa las llamadas al API
+# ("Failed to fetch") y hace al bundle agnostico del dominio.
 
 FROM node:20-alpine AS build
 
 WORKDIR /app
 
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ARG NEXT_PUBLIC_API_URL=
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 ARG API_INTERNAL_URL=http://localhost:8000

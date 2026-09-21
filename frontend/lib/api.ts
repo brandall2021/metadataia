@@ -5,7 +5,7 @@
 // y el proxy/rewrite de Next enruta /api hacia el backend (ver next.config.ts).
 // No agregar "/api" aqui para evitar duplicarlo (origin + /api + /api == 404).
 export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ??
+  process.env.NEXT_PUBLIC_API_URL ||
   (typeof window !== "undefined" ? window.location.origin : "");
 
 const TOKEN_KEY = "metadataia_token";

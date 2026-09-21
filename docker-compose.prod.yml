@@ -140,11 +140,11 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.prod
       args:
-        # SIN /api al final: las llamadas a apiFetch ya incluyen /api en su
-        # path (apiFetch("/api/...")), y el rewrite de Next enruta /api -> api.
-        # Si este valor terminara en /api, la URL final duplicaria el segmento
-        # (/api/api/...) y el login devolveria 404.
-        NEXT_PUBLIC_API_URL: https://${DOMAIN:?Defina DOMAIN en .env (p. ej. miapp.dominio.gob.ar)}
+        # NEXT_PUBLIC_API_URL es OPCIONAL: si se omite, el browser usa el mismo
+        # origen (window.location.origin) y el rewrite de Next enruta /api -> api.
+        # No hornear un dominio fijo aqui: si esa URL no resuelve (p.ej. dominio
+        # vencido), toda llamada al API falla con "Failed to fetch".
+        # Las llamadas a apiFetch ya incluyen /api en su path.
         API_INTERNAL_URL: http://api:8000
     environment:
       # Rewrite /api -> backend dentro de la red del stack (Dokploy: misma
