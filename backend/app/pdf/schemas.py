@@ -31,6 +31,7 @@ class DocumentDetailOut(DocumentOut):
     pages: list[DocumentPageOut] = []
     analysis: dict = {}
     jobs: list[dict] = []
+    extraction_runs: list[dict] = []
 
 
 class OcrRequestOut(BaseModel):

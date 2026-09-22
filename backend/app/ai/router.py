@@ -200,7 +200,7 @@ def create_model(
     _: AIModel = Depends(admin_models),
     db: Session = Depends(get_db),
 ):
-    provider = _get_provider(db, body.provider_id)
+    provider = _get_provider(db, str(body.provider_id))
     model = AIModel(
         provider_id=provider.id,
         name=body.name,
@@ -228,7 +228,7 @@ def update_model(
 ):
     model = _get_model(db, model_id)
     if body.provider_id is not None:
-        model.provider_id = _get_provider(db, body.provider_id).id
+        model.provider_id = _get_provider(db, str(body.provider_id)).id
     if body.name is not None:
         model.name = body.name
     if body.model_identifier is not None:
@@ -387,7 +387,7 @@ def create_agent(
         name=body.name,
         code=body.code,
         description=body.description,
-        document_type_id=uuid.UUID(body.document_type_id) if body.document_type_id else None,
+        document_type_id=body.document_type_id,
         active=body.active,
     )
     db.add(agent)
@@ -437,7 +437,7 @@ def update_agent(
     if body.description is not None:
         agent.description = body.description
     if body.document_type_id is not None:
-        agent.document_type_id = uuid.UUID(body.document_type_id)
+        agent.document_type_id = body.document_type_id
     if body.active is not None:
         agent.active = body.active
 
@@ -452,13 +452,13 @@ def update_agent(
     }
     if any(v is not None for v in version_fields.values()):
         base = agent.current_version
-        model_id = body.model_id or (str(base.model_id) if base else None)
+        model_id = body.model_id or (base.model_id if base else None)
         if model_id is None:
             raise HTTPException(status_code=422, detail="Se requiere model_id o una version previa")
         _create_version(
             db,
             agent,
-            model_id,
+            str(model_id),
             body.system_prompt if body.system_prompt is not None else (base.system_prompt if base else None),
             body.extraction_prompt if body.extraction_prompt is not None else (base.extraction_prompt if base else None),
             body.temperature if body.temperature is not None else (base.temperature if base else None),
@@ -503,7 +503,7 @@ def create_agent_version(
     version = _create_version(
         db,
         agent,
-        body.model_id,
+        str(body.model_id),
         body.system_prompt,
         body.extraction_prompt,
         body.temperature,

@@ -18,6 +18,7 @@ from app.models.metadata import (
     VocabularyValue,
 )
 from app.models.repository import Repository, RepositoryCollection
+from app.models.settings import AppSetting
 from app.models.user import Permission, RevokedToken, Role, User
 
 __all__ = [
@@ -25,6 +26,7 @@ __all__ = [
     "AIModel",
     "AIAgent",
     "AIAgentVersion",
+    "AppSetting",
     "AuditLog",
     "Deposition",
     "Document",

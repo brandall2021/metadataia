@@ -71,3 +71,27 @@ def require_permission(code: str):
         return user
 
     return _dependency
+
+
+def require_any_of(*codes: str):
+    """Dependencia que exige al menos uno de los permisos indicados.
+
+    Util cuando un endpoint debe ser alcanzable por varios roles/perfiles
+    (p. ej. ``document.view`` o ``admin.users.manage``).
+    """
+
+    def _dependency(user: User = Depends(get_current_user)) -> User:
+        allowed = {p.code for role in user.roles for p in role.permissions}
+        if not allowed.intersection(codes):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tiene permisos para esta operacion",
+            )
+        return user
+
+    return _dependency
+
+
+def require_settings_permission():
+    """Dependencia para administrar la configuracion global."""
+    return require_permission("admin.settings.manage")

@@ -27,12 +27,106 @@ from app.dspace.connector import build_connector
 from app.snrd.export import dc_fields
 from app.snrd.validator import validate_snrd
 from app.validation import engine as validation_engine
+from app.workflows import DocumentStatus, set_document_status
+
+
+def _set_progress(job: ProcessingJob | None, value: int) -> None:
+    if job is not None:
+        job.progress = max(0, min(100, value))
+
+
+def _repair_json_response(provider, model_identifier, system, user, *, temperature, max_tokens):
+    repair_user = (
+        user
+        + "\n\nLa respuesta anterior no era JSON valido. Devuelve SOLO un objeto JSON valido, sin markdown ni texto adicional."
+    )
+    return engine.call_model(
+        provider,
+        model_identifier,
+        system,
+        repair_user,
+        temperature=0.0,
+        max_tokens=max_tokens,
+        supports_json=True,
+    )
 
 
 @shared_task(name="app.jobs.tasks.analyze_document")
 def analyze_document(document_id: str) -> dict:
-    """Job placeholder: analisis de documento (FASE 7 ya cubre el analisis)."""
-    return {"document_id": document_id, "status": "PENDING"}
+    """Analisis liviano del PDF antes de OCR/extraccion.
+
+    Recalcula las propiedades principales del documento y deja trazabilidad en
+    ``processing_jobs``. Si el PDF ya tenia el texto extraido no altera el
+    contenido: solo refresca metadatos de analisis.
+    """
+    db = SessionLocal()
+    job = None
+    try:
+        doc = db.get(Document, UUID(document_id))
+        if doc is None:
+            return {"status": "ERROR", "document_id": document_id, "error": "documento no encontrado"}
+        job = (
+            db.query(ProcessingJob)
+            .filter(
+                ProcessingJob.document_id == doc.id,
+                ProcessingJob.job_type == "ANALYSIS",
+                ProcessingJob.status == "PENDING",
+            )
+            .order_by(ProcessingJob.created_at.asc())
+            .first()
+        )
+        if job is None:
+            job = ProcessingJob(document_id=doc.id, job_type="ANALYSIS", status="PENDING")
+            db.add(job)
+            db.flush()
+        job.status = "RUNNING"
+        job.started_at = datetime.now(timezone.utc)
+        _set_progress(job, 10)
+        set_document_status(db, doc, DocumentStatus.ANALYZING)
+        db.commit()
+
+        original = storage.download_original(doc.storage_path)
+        analysis = engine.analyze_pdf(original)
+        doc.page_count = analysis["page_count"]
+        doc.needs_ocr = analysis["needs_ocr"]
+        for i, text in enumerate(analysis["pages_text"], start=1):
+            page = next((p for p in doc.pages if p.page_number == i), None)
+            if page is None:
+                page = None
+            if page is not None:
+                page.text = text
+                page.text_length = len(text or "")
+        _set_progress(job, 80)
+        set_document_status(db, doc, DocumentStatus.TEXT_EXTRACTED)
+        job.status = "COMPLETED"
+        job.finished_at = datetime.now(timezone.utc)
+        job.metadata_json = {
+            "page_count": analysis["page_count"],
+            "needs_ocr": analysis["needs_ocr"],
+            "text_pages": len(analysis.get("pages_text", []) or []),
+        }
+        _set_progress(job, 100)
+        db.commit()
+        return {
+            "status": "COMPLETED",
+            "document_id": document_id,
+            "page_count": analysis["page_count"],
+            "needs_ocr": analysis["needs_ocr"],
+        }
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        if job is not None:
+            job.status = "ERROR"
+            job.error_message = str(exc)[:2000]
+            job.finished_at = datetime.now(timezone.utc)
+            _set_progress(job, 0)
+        doc = db.get(Document, UUID(document_id)) if document_id else None
+        if doc is not None:
+            set_document_status(db, doc, DocumentStatus.ERROR)
+            db.commit()
+        return {"status": "ERROR", "document_id": document_id, "error": str(exc)[:1000]}
+    finally:
+        db.close()
 
 
 @shared_task(name="app.jobs.tasks.run_ocr")
@@ -65,12 +159,12 @@ def run_ocr(document_id: str, languages: str | None = None) -> dict:
             db.flush()
         job.status = "RUNNING"
         job.started_at = datetime.now(timezone.utc)
-        doc.status = "PROCESSING"
+        set_document_status(db, doc, DocumentStatus.OCR_PROCESSING)
         db.commit()
         db.refresh(job)
 
         original = storage.download_original(doc.storage_path)
-        langs = languages or settings.ocr_languages
+        langs = ocr_engine.resolve_ocr_languages(db, doc, languages)
         result = ocr_engine.perform_ocr(original, langs)
         searchable_pdf = result["pdf"]
         ocr_key = storage.upload_searchable(doc.sha256 or "", searchable_pdf)
@@ -118,8 +212,8 @@ def run_ocr(document_id: str, languages: str | None = None) -> dict:
             job.error_message = str(exc)[:2000]
             job.finished_at = datetime.now(timezone.utc)
             doc = db.get(Document, UUID(document_id))
-            if doc is not None and doc.status == "PROCESSING":
-                doc.status = "UPLOADED"
+            if doc is not None and doc.status == DocumentStatus.OCR_PROCESSING:
+                doc.status = DocumentStatus.UPLOADED
             db.commit()
         return {"status": "ERROR", "document_id": document_id, "error": str(exc)[:1000]}
     finally:
@@ -128,8 +222,78 @@ def run_ocr(document_id: str, languages: str | None = None) -> dict:
 
 @shared_task(name="app.jobs.tasks.extract_text")
 def extract_text(document_id: str) -> dict:
-    """Job placeholder: extraccion de texto por pagina (FASE 8/16)."""
-    return {"document_id": document_id, "status": "PENDING"}
+    """Extraccion de texto por pagina.
+
+    Si el documento requiere OCR, ejecuta OCRmyPDF; si no, refresca el texto
+    ya disponible desde el PDF original.
+    """
+    db = SessionLocal()
+    job = None
+    try:
+        doc = db.get(Document, UUID(document_id))
+        if doc is None:
+            return {"status": "ERROR", "document_id": document_id, "error": "documento no encontrado"}
+        job = (
+            db.query(ProcessingJob)
+            .filter(
+                ProcessingJob.document_id == doc.id,
+                ProcessingJob.job_type == "TEXT_EXTRACTION",
+                ProcessingJob.status == "PENDING",
+            )
+            .order_by(ProcessingJob.created_at.asc())
+            .first()
+        )
+        if job is None:
+            job = ProcessingJob(document_id=doc.id, job_type="TEXT_EXTRACTION", status="PENDING")
+            db.add(job)
+            db.flush()
+        job.status = "RUNNING"
+        job.started_at = datetime.now(timezone.utc)
+        _set_progress(job, 10)
+        set_document_status(db, doc, DocumentStatus.ANALYZING)
+        db.commit()
+
+        original = storage.download_original(doc.storage_path)
+        needs_ocr = doc.needs_ocr
+        pages_text = ocr_engine.extract_text_pdf(original)
+        if needs_ocr or not any((t or "").strip() for t in pages_text):
+            _set_progress(job, 40)
+            langs = ocr_engine.resolve_ocr_languages(db, doc)
+            result = ocr_engine.perform_ocr(original, langs)
+            searchable_pdf = result["pdf"]
+            pages_text = ocr_engine.extract_text_pdf(searchable_pdf)
+            storage.upload_searchable(doc.sha256 or "", searchable_pdf)
+            doc.needs_ocr = False
+            doc.status = "OCR_COMPLETED"
+        for i, text in enumerate(pages_text, start=1):
+            page = next((p for p in doc.pages if p.page_number == i), None)
+            if page is None:
+                continue
+            page.text = text or ""
+            page.text_length = len(page.text)
+            page.ocr_used = needs_ocr
+        _set_progress(job, 90)
+        set_document_status(db, doc, DocumentStatus.TEXT_EXTRACTED)
+        job.status = "COMPLETED"
+        job.finished_at = datetime.now(timezone.utc)
+        job.metadata_json = {"pages": len(pages_text)}
+        _set_progress(job, 100)
+        db.commit()
+        return {"status": "COMPLETED", "document_id": document_id, "pages": len(pages_text)}
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        if job is not None:
+            job.status = "ERROR"
+            job.error_message = str(exc)[:2000]
+            job.finished_at = datetime.now(timezone.utc)
+            _set_progress(job, 0)
+        doc = db.get(Document, UUID(document_id)) if document_id else None
+        if doc is not None:
+            set_document_status(db, doc, DocumentStatus.ERROR)
+            db.commit()
+        return {"status": "ERROR", "document_id": document_id, "error": str(exc)[:1000]}
+    finally:
+        db.close()
 
 
 @shared_task(name="app.jobs.tasks.extract_metadata")
@@ -191,7 +355,7 @@ def extract_metadata(document_id: str) -> dict:
             db.flush()
         job.status = "RUNNING"
         job.started_at = datetime.now(timezone.utc)
-        doc.status = "PROCESSING"
+        set_document_status(db, doc, DocumentStatus.AI_PROCESSING)
         db.commit()
         db.refresh(run)
 
@@ -204,7 +368,19 @@ def extract_metadata(document_id: str) -> dict:
             max_tokens=version.max_tokens,
             supports_json=model.supports_json,
         )
-        data = engine.parse_content(call["content"])
+        try:
+            data = engine.parse_content(call["content"])
+        except engine.ExtractionError:
+            repair = _repair_json_response(
+                provider,
+                model.model_identifier,
+                system,
+                user,
+                temperature=version.temperature,
+                max_tokens=version.max_tokens,
+            )
+            call = {**call, **repair}
+            data = engine.parse_content(repair["content"])
         payload = data.get("fields", data) if isinstance(data, dict) else data
         schema_errors = engine.validate_schema(payload, version.output_schema_json or {})
         if schema_errors:
@@ -235,7 +411,7 @@ def extract_metadata(document_id: str) -> dict:
                 )
             )
 
-        doc.status = "METADATA_EXTRACTED"
+        set_document_status(db, doc, DocumentStatus.METADATA_EXTRACTED)
         run.status = "COMPLETED"
         run.finished_at = datetime.now(timezone.utc)
         run.raw_response_storage_path = raw_key
@@ -285,12 +461,12 @@ def extract_metadata(document_id: str) -> dict:
     except Exception as exc:  # noqa: BLE001 - el error queda registrado
         db.rollback()
         doc = db.get(Document, UUID(document_id))
-        if doc is not None and doc.status == "PROCESSING":
-            doc.status = "UPLOADED"
+        if doc is not None and doc.status == DocumentStatus.AI_PROCESSING:
+            doc.status = DocumentStatus.UPLOADED
         if run is not None:
             run = db.get(ExtractionRun, run.id)
             if run is not None:
-                run.status = "ERROR"
+                run.status = "AI_ERROR" if any(code in str(exc) for code in ("AI_INVALID_JSON", "AI_TIMEOUT", "AI_CONNECTION_ERROR", "AI_SCHEMA_ERROR")) else "ERROR"
                 run.finished_at = datetime.now(timezone.utc)
                 run.error_message = str(exc)[:2000]
         if job is not None:
@@ -352,7 +528,7 @@ def normalize_metadata(document_id: str) -> dict:
             db.flush()
         job.status = "RUNNING"
         job.started_at = datetime.now(timezone.utc)
-        doc.status = "PROCESSING"
+        set_document_status(db, doc, DocumentStatus.NORMALIZING)
         db.commit()
 
         vocab_cache: dict = {}
@@ -381,7 +557,7 @@ def normalize_metadata(document_id: str) -> dict:
                 rec.normalized = True
                 changed += 1
 
-        doc.status = "NORMALIZED"
+        set_document_status(db, doc, DocumentStatus.NORMALIZED)
         job.status = "COMPLETED"
         job.finished_at = datetime.now(timezone.utc)
         job.metadata_json = {
@@ -457,7 +633,7 @@ def validate_metadata(document_id: str) -> dict:
             db.flush()
         job.status = "RUNNING"
         job.started_at = datetime.now(timezone.utc)
-        doc.status = "PROCESSING"
+        set_document_status(db, doc, DocumentStatus.VALIDATING)
         db.commit()
 
         vocab_cache: dict = {}
@@ -473,7 +649,7 @@ def validate_metadata(document_id: str) -> dict:
                     .all()
                 )
 
-        outcome = validation_engine.validate_records(records, vocab_cache)
+        outcome = validation_engine.validate_records(records, vocab_cache, db=db)
         type_fields = []
         if doc.document_type is not None:
             type_fields = [
@@ -483,7 +659,7 @@ def validate_metadata(document_id: str) -> dict:
             ]
         outcome.errors = validation_engine.missing_required(type_fields, records) + outcome.errors
         snrd_errors, snrd_warnings = validate_snrd(
-            records, doc_type_label=doc.document_type.code if doc.document_type else None
+            records, doc_type_label=doc.document_type.code if doc.document_type else None, db=db
         )
         errors = outcome.errors + snrd_errors
         warnings = outcome.warnings + snrd_warnings
@@ -504,7 +680,7 @@ def validate_metadata(document_id: str) -> dict:
         )
         db.add_all([meta_result, snrd_result])
 
-        doc.status = "VALIDATED" if not errors else "VALIDATION_FAILED"
+        set_document_status(db, doc, DocumentStatus.VALIDATED if not errors else DocumentStatus.VALIDATION_FAILED)
         job.status = "COMPLETED"
         job.finished_at = datetime.now(timezone.utc)
         job.metadata_json = {
@@ -548,8 +724,8 @@ def validate_metadata(document_id: str) -> dict:
 
 @shared_task(name="app.jobs.tasks.deposit_dspace")
 def deposit_dspace(document_id: str) -> dict:
-    """Job placeholder: deposito en DSpace (FASE 13)."""
-    return {"document_id": document_id, "status": "PENDING"}
+    """Alias del job de deposito para compatibilidad con la cola."""
+    return deposit_document(document_id)
 
 
 @shared_task(name="app.jobs.tasks.deposit_document")
@@ -640,7 +816,7 @@ def deposit_document(document_id: str) -> dict:
 
         job.status = "RUNNING"
         job.started_at = datetime.now(timezone.utc)
-        doc.status = "DEPOSITING"
+        set_document_status(db, doc, DocumentStatus.DEPOSITING)
         dep = Deposition(
             document_id=doc.id,
             repository_id=repo.id,
@@ -658,7 +834,7 @@ def deposit_document(document_id: str) -> dict:
             .all()
         )
         metadata = dc_fields(records, identifier=doc.sha256)
-        content = storage.download_original(f"documents/{doc.sha256}.pdf")
+        content = storage.download_original(doc.storage_path)
 
         connector = build_connector(repo)
         token = connector.authenticate()
@@ -728,7 +904,7 @@ def deposit_document(document_id: str) -> dict:
                 dep_row.finished_at = datetime.now(timezone.utc)
                 dep_row.error_message = str(exc)[:2000]
             doc = db.get(Document, UUID(document_id))
-            if doc is not None and doc.status == "DEPOSITING":
+            if doc is not None and doc.status == DocumentStatus.DEPOSITING:
                 doc.status = "APPROVED"
             audit_log(
                 db,

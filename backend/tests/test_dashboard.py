@@ -89,6 +89,8 @@ def _fake_call_model(monkeypatch):
         "date": "10/05/2023",
         "language": "Spanish",
         "title": "Dashboard de estadisticas",
+        "type": "Tesis de maestria",
+        "rights": "openAccess",
     }
     monkeypatch.setattr(
         engine,

@@ -37,6 +37,8 @@ def extract_fields(body):
     fields["creator"] = {"value": "juan  perez", "confidence": 0.95, "source_page": 1}
     fields["date"] = {"value": "10/05/2023", "confidence": 0.92}
     fields["language"] = {"value": "Spanish", "confidence": 0.99, "source_page": 1}
+    fields["type"] = {"value": "Tesis de maestria", "confidence": 0.9, "source_page": 1}
+    fields["rights"] = {"value": "openAccess", "confidence": 0.9, "source_page": 1}
     fields["subject"] = [
         {"value": "Inteligencia artificial en bibliotecas", "confidence": 0.9, "source_page": 1},
         {"value": "Metadatos descriptivos", "confidence": 0.88, "source_page": 1},

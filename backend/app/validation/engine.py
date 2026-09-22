@@ -10,9 +10,25 @@ motor SNRD (modulo aparte) agrega la verificacion de interoperabilidad.
 import re
 from dataclasses import dataclass, field as dataclass_field
 
+from app.administration.service import get_setting
 from app.normalization.engine import normalize_date, normalize_doi, normalize_orcid
 
 CONFIDENCE_WARNING_THRESHOLD = 0.6
+
+# Regla de formato por defecto segun el ``data_type`` del campo, aplicada
+# cuando el campo no define un ``validation_type`` explicito.
+DATA_TYPE_RULES = {
+    "date": "date",
+    "integer": "integer",
+    "float": "float",
+    "email": "email",
+    "url": "url",
+    "doi": "doi",
+    "orcid": "orcid",
+    "isbn": "isbn",
+    "issn": "issn",
+    "identifier": "identifier",
+}
 
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 URL_RE = re.compile(r"^https?://[A-Za-z0-9.\-]+(/[^\s]*)?$")
@@ -66,6 +82,8 @@ def check_value(field, value, vocab_values: list | None = None) -> list[dict]:
     if m:
         rule = m.group(1).lower()
         param = m.group(2)
+    elif not rule:
+        rule = DATA_TYPE_RULES.get((field.data_type or "").lower(), "")
 
     if field.vocabulary_id:
         values = list(vocab_values or [])
@@ -160,10 +178,59 @@ def missing_required(type_fields: list, records) -> list[dict]:
     return errors
 
 
-def validate_records(records, vocab_cache: dict | None = None) -> ValidationOutcome:
-    """Ejecuta las reglas por campo sobre los registros de un documento."""
+def check_repeatability(records) -> list[dict]:
+    """Campos no repetibles con mas de un registro -> ERROR."""
+    errors: list[dict] = []
+    counts: dict[str, list] = {}
+    for rec in records:
+        field = rec.metadata_field
+        if field is None:
+            continue
+        if getattr(field, "repeatable", True):
+            continue
+        key = field_key(field.element, field.qualifier)
+        counts.setdefault(key, []).append(rec)
+    for key, items in counts.items():
+        if len(items) > 1:
+            errors.append(
+                _error(
+                    items[0].metadata_field,
+                    "not_repeatable",
+                    f"El campo '{key}' no es repetible y tiene {len(items)} registros",
+                    [i.value for i in items],
+                )
+            )
+    return errors
+
+
+def _confidence_threshold(db) -> float:
+    """Umbral de confianza recomendado: override de DB si existe, si no el default."""
+    if db is not None:
+        try:
+            value = get_setting(db, "min_confidence_recommended", CONFIDENCE_WARNING_THRESHOLD)
+            return float(value)
+        except Exception:  # noqa: BLE001 - setting corrupto
+            pass
+    return CONFIDENCE_WARNING_THRESHOLD
+
+
+def validate_records(records, vocab_cache: dict | None = None, *, db=None, threshold=None) -> ValidationOutcome:
+    """Ejecuta las reglas por campo sobre los registros de un documento.
+
+    ``db`` habilita la resolucion de settings administrables
+    (``min_confidence_recommended``) y ``threshold`` fuerza un umbral de
+    confianza explicito por encima del configurado.
+    """
     outcome = ValidationOutcome()
     vocab_cache = vocab_cache or {}
+    effective_threshold = threshold
+    if effective_threshold is None:
+        effective_threshold = _confidence_threshold(db)
+    try:
+        effective_threshold = float(effective_threshold)
+    except (TypeError, ValueError):
+        effective_threshold = CONFIDENCE_WARNING_THRESHOLD
+    outcome.errors.extend(check_repeatability(records))
     for rec in records:
         field = rec.metadata_field
         if field is None:
@@ -172,7 +239,7 @@ def validate_records(records, vocab_cache: dict | None = None) -> ValidationOutc
         for err in check_value(field, rec.value, vocab_values):
             outcome.errors.append(err)
         conf = getattr(rec, "confidence", None)
-        if conf is not None and conf < CONFIDENCE_WARNING_THRESHOLD:
+        if conf is not None and conf < effective_threshold:
             outcome.warnings.append(
                 {
                     "field": field_key(field.element, field.qualifier),

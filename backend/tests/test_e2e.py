@@ -267,7 +267,7 @@ def test_e2e_flujo_completo(
     assert doc["needs_ocr"] is False
     res = extract_metadata(doc["id"])
     assert res["status"] == "COMPLETED", res
-    assert res["records"] == 4
+    assert res["records"] == 6
 
     info = _real_run(doc["id"])
     assert info["status"] == "COMPLETED"

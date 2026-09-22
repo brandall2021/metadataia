@@ -200,6 +200,13 @@ def test_listar_roles_contiene_seed(client, admin_headers):
     assert "admin.users.manage" in admin_role["permissions"]
 
 
+def test_listar_permisos_contiene_seed(client, admin_headers):
+    r = client.get("/api/permissions", headers=admin_headers)
+    assert r.status_code == 200
+    codes = {perm["code"] for perm in r.json()}
+    assert "admin.users.manage" in codes
+
+
 def test_roles_sin_permiso_403(client, catalogador_headers):
     assert client.get("/api/roles", headers=catalogador_headers).status_code == 403
 

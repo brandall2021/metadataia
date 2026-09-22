@@ -179,6 +179,7 @@ class DocumentTypeCreate(BaseModel):
     description: str | None = None
     default_agent_id: uuid.UUID | None = None
     active: bool = True
+    ocr_languages: str | None = Field(default=None, max_length=200)
 
 
 class DocumentTypeUpdate(BaseModel):
@@ -186,6 +187,7 @@ class DocumentTypeUpdate(BaseModel):
     description: str | None = None
     default_agent_id: uuid.UUID | None = None
     active: bool | None = None
+    ocr_languages: str | None = Field(default=None, max_length=200)
 
 
 class DocumentTypeFieldLink(BaseModel):
@@ -225,6 +227,7 @@ class DocumentTypeOut(BaseModel):
     default_agent_code: str | None
     default_agent_name: str | None
     active: bool
+    ocr_languages: str | None = None
     created_at: datetime
     updated_at: datetime
     fields: list[DocumentTypeFieldOut] = []

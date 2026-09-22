@@ -18,13 +18,16 @@ from app.core.dependencies import require_permission
 from app.extraction.engine import field_key
 from app.jobs.tasks import validate_metadata
 from app.models import Document, MetadataField, MetadataRecord, User
+from app.workflows import DocumentStatus, EDIT_LOCKED_STATES
 
 router = APIRouter(prefix="/documents", tags=["review"])
 
 can_review = require_permission("document.review")
 can_approve = require_permission("document.approve")
 
-REVIEWABLE_EDIT_BLOCK = ("APPROVED", "DEPOSITANDO", "DEPOSITED")
+# Estados en los que los registros de metadato no pueden editarse: los estados
+# con procesamiento en curso (EDIT_LOCKED_STATES) y los ya aprobados.
+REVIEWABLE_EDIT_BLOCK = EDIT_LOCKED_STATES | {DocumentStatus.APPROVED}
 NOT_FOUND_DOC = "Documento no encontrado"
 NOT_FOUND_REC = "Registro de metadato no encontrado"
 
@@ -67,7 +70,7 @@ def _ensure_editable(doc: Document) -> None:
 
 
 def _mark_review(db: Session, doc: Document) -> None:
-    doc.status = "NEEDS_REVIEW"
+    doc.status = DocumentStatus.NEEDS_REVIEW
 
 
 def _record_out(rec: MetadataRecord) -> dict:
@@ -211,12 +214,12 @@ def approve_document(
     user: User = Depends(can_approve),
 ):
     doc = _get_doc(db, document_id)
-    if doc.status in ("DEPOSITANDO", "DEPOSITED"):
+    if doc.status in (DocumentStatus.DEPOSITING, DocumentStatus.DEPOSITED):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="El documento ya esta en proceso de deposito",
         )
-    if doc.status == "APPROVED":
+    if doc.status == DocumentStatus.APPROVED:
         return ReviewResult(document_id=doc.id, status=doc.status)
     has_records = (
         db.query(MetadataRecord)
@@ -235,7 +238,7 @@ def approve_document(
             detail="No se puede aprobar: la validacion tiene errores",
         )
     doc = _get_doc(db, document_id)
-    doc.status = "APPROVED"
+    doc.status = DocumentStatus.APPROVED
     audit_log(
         db,
         user=user,
@@ -258,12 +261,12 @@ def reject_document(
     user: User = Depends(can_review),
 ):
     doc = _get_doc(db, document_id)
-    if doc.status == "APPROVED":
+    if doc.status == DocumentStatus.APPROVED:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="No se puede rechazar un documento ya aprobado",
         )
-    doc.status = "REJECTED"
+    doc.status = DocumentStatus.REJECTED
     audit_log(
         db,
         user=user,

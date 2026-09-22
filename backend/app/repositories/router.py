@@ -5,6 +5,7 @@ API, autenticacion, usuario, credencial), sincronizacion de comunidades y
 colecciones, y asociacion de tipo documental con coleccion.
 """
 
+import time
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -14,6 +15,8 @@ from sqlalchemy.orm import Session
 from app.audit.service import audit_log, request_context
 from app.core.database import get_db
 from app.core.dependencies import require_permission
+from app.core.security import encrypt_secret
+from app.core.errors import AppError, DSPACE_AUTH_ERROR
 from app.dspace.connector import build_connector
 from app.models import DocumentType, Repository, RepositoryCollection, User
 
@@ -54,8 +57,16 @@ class RepositoryOut(BaseModel):
     api_url: str | None = None
     authentication_type: str | None = None
     username: str | None = None
-    credential: str | None = None
+    credential: str | None = MASKED
+    credential_reference: str | None = None
     active: bool
+
+
+class RepositoryTestOut(BaseModel):
+    ok: bool
+    message: str
+    time_ms: float
+    detail: str | None = None
 
 
 class CollectionOut(BaseModel):
@@ -81,6 +92,7 @@ class SyncOut(BaseModel):
 
 
 def _repo_out(repo: Repository) -> RepositoryOut:
+    has_credential = bool((repo.configuration_json or {}).get("credential"))
     return RepositoryOut(
         id=repo.id,
         name=repo.name,
@@ -89,7 +101,8 @@ def _repo_out(repo: Repository) -> RepositoryOut:
         api_url=repo.api_url,
         authentication_type=repo.authentication_type,
         username=repo.username,
-        credential=MASKED if (repo.configuration_json or {}).get("credential") else None,
+        credential=MASKED if has_credential else None,
+        credential_reference=repo.credential_reference,
         active=repo.active,
     )
 
@@ -150,7 +163,11 @@ def create_repository(
     existing = db.query(Repository).filter(Repository.code == body.code).one_or_none()
     if existing is not None:
         raise HTTPException(status_code=409, detail="Ya existe un repositorio con ese codigo")
-    cfg = {"credential": body.credential} if body.credential else None
+    credential_reference = None
+    cfg = None
+    if body.credential:
+        credential_reference = f"repository.{body.code}.credential"
+        cfg = {"credential": encrypt_secret(body.credential)}
     repo = Repository(
         name=body.name,
         code=body.code,
@@ -158,6 +175,7 @@ def create_repository(
         api_url=body.api_url,
         authentication_type=body.authentication_type,
         username=body.username,
+        credential_reference=credential_reference,
         active=body.active,
         configuration_json=cfg,
     )
@@ -183,6 +201,42 @@ def get_repository(repository_id: uuid.UUID, db: Session = Depends(get_db), _: s
     return _repo_out(_get_repo(db, repository_id))
 
 
+@router.post("/admin/repositories/{repository_id}/test", response_model=RepositoryTestOut)
+def test_repository(
+    repository_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: str = Depends(can_manage),
+):
+    repo = _get_repo(db, repository_id)
+    started = time.perf_counter()
+    try:
+        connector = build_connector(repo)
+        token = connector.authenticate()
+        communities = connector.get_communities(token)
+        elapsed = (time.perf_counter() - started) * 1000.0
+        return RepositoryTestOut(
+            ok=True,
+            message=f"Conexion exitosa: {len(communities)} comunidades obtenidas",
+            time_ms=round(elapsed, 1),
+        )
+    except AppError as exc:
+        elapsed = (time.perf_counter() - started) * 1000.0
+        return RepositoryTestOut(
+            ok=False,
+            message=f"No se pudo conectar al repositorio: {exc.message}",
+            time_ms=round(elapsed, 1),
+            detail=exc.message,
+        )
+    except Exception as exc:  # noqa: BLE001
+        elapsed = (time.perf_counter() - started) * 1000.0
+        return RepositoryTestOut(
+            ok=False,
+            message=f"No se pudo conectar al repositorio: {exc}",
+            time_ms=round(elapsed, 1),
+            detail=str(exc),
+        )
+
+
 @router.put("/admin/repositories/{repository_id}", response_model=RepositoryOut)
 def update_repository(
     repository_id: uuid.UUID,
@@ -206,8 +260,9 @@ def update_repository(
         repo.active = body.active
     if body.credential:
         cfg = dict(repo.configuration_json or {})
-        cfg["credential"] = body.credential
+        cfg["credential"] = encrypt_secret(body.credential)
         repo.configuration_json = cfg
+        repo.credential_reference = f"repository.{repo.code}.credential"
     new = _public_repo_state(repo)
     if body.credential:
         new["credential"] = MASKED
@@ -364,7 +419,7 @@ def delete_collection(
         user=user,
         action="collection.delete",
         entity_type="repository",
-        entity_id=str(repo_id),
+        entity_id=str(repository_id),
         old_value={"name": col.name, "handle": col.handle},
         **request_context(request),
     )

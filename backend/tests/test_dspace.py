@@ -203,6 +203,8 @@ def _fake_call_model(monkeypatch):
         "title": "Impacto de la IA en bibliotecas",
         "subject": ["IA", "Metadatos"],
         "description": "Resumen de la tesis",
+        "type": "Tesis de maestria",
+        "rights": "openAccess",
     }
     monkeypatch.setattr(engine, "call_model", _fake_with(fields))
     return None

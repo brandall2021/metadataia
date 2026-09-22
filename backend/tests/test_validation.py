@@ -92,6 +92,8 @@ FAKE_RESPONSE = {
                 "creator": {"value": "juan  perez", "confidence": 0.95},
                 "date": {"value": "10/05/2023", "confidence": 0.92},
                 "language": {"value": "Spanish", "confidence": 0.99},
+                "type": {"value": "Tesis de maestria", "confidence": 0.9},
+                "rights": {"value": "openAccess", "confidence": 0.9},
             }
         }
     ),
@@ -223,14 +225,22 @@ def test_snrd_faltantes_y_fecha_no_iso():
     codes = {e["code"] for e in errors}
     assert "missing_required" in codes  # title faltante
     assert "invalid_date" in codes
-    assert any(w["code"] == "language_missing" for w in warnings)
+    # language es obligatorio en el perfil SNRD -> error (no warning)
+    assert any(e["code"] == "language_missing" for e in errors)
+    # creator obligatorio por consistencia del conjunto
+    assert any(e["code"] == "missing_creator" for e in errors)
+    # rights recomendado
+    assert any(w["code"] == "recommended_missing" for w in warnings)
 
 
 def test_snrd_ok():
     recs = [
         _Rec(_f("title"), "Titulo", 0.9),
+        _Rec(_f("creator"), "Perez, Juan", 0.9),
         _Rec(_f("date"), "2023-05-10", 0.9),
         _Rec(_f("language"), "spa", 0.9),
+        _Rec(_f("type"), "Tesis", 0.9),
+        _Rec(_f("rights"), "openAccess", 0.9),
     ]
     errors, warnings = validate_snrd(recs)
     assert errors == []

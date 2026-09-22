@@ -7,9 +7,25 @@ desde el backend; el frontend nunca habla con DSpace directamente.
 
 import httpx
 
+from app.core.security import decrypt_secret
 from app.models import Repository
 
 DSpaceError = RuntimeError
+
+
+def _resolve_credential(stored: str | None) -> str | None:
+    """Devuelve la credencial en claro.
+
+    Las credenciales nuevas se guardan cifradas en ``configuration_json``;
+    si el valor no descifra (credenciales legacy guardadas en claro) se
+    devuelve tal cual para no romper configuraciones existentes.
+    """
+    if not stored:
+        return stored
+    try:
+        return decrypt_secret(stored)
+    except Exception:  # noqa: BLE001
+        return stored
 
 
 class RepositoryConnector:
@@ -188,6 +204,6 @@ def build_connector(repo: Repository) -> Dspace9Connector:
     return Dspace9Connector(
         api_url=repo.api_url or "",
         username=repo.username,
-        credential=cfg.get("credential"),
+        credential=_resolve_credential(cfg.get("credential")),
         section=cfg.get("submission_section", "traditionalpageone"),
     )

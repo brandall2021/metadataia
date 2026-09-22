@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -13,10 +13,21 @@ from app.auth.session import revoke_token, token_is_revoked
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import security, get_current_user
+from app.core.errors import AppError
+from app.core.ratelimit import rate_limit
 from app.core.security import create_access_token, decode_token, verify_password
 from app.models import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Codigos de error estandar (seccion 33): aditivos sobre el codigo HTTP.
+AUTH_INVALID_CREDENTIALS = "AUTH_INVALID_CREDENTIALS"
+AUTH_USER_INACTIVE = "AUTH_USER_INACTIVE"
+AUTH_NOT_AUTHENTICATED = "AUTH_NOT_AUTHENTICATED"
+AUTH_INVALID_TOKEN = "AUTH_INVALID_TOKEN"
+
+LOGIN_RATE_LIMIT = (10, 300)  # 10 intentos / 300 s por IP
+REFRESH_RATE_LIMIT = (30, 300)
 
 
 def _token_response(user: User) -> TokenResponse:
@@ -28,12 +39,27 @@ def _token_response(user: User) -> TokenResponse:
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)) -> TokenResponse:
+def login(
+    body: LoginRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    _rate: None = Depends(rate_limit(*LOGIN_RATE_LIMIT)),
+) -> TokenResponse:
     user = db.query(User).filter(User.username == body.username).one_or_none()
     if user is None or not verify_password(body.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Credenciales invalidas")
+        raise AppError(
+            AUTH_INVALID_CREDENTIALS,
+            "Credenciales invalidas",
+            status_code=401,
+            detail="Credenciales invalidas",
+        )
     if not user.active:
-        raise HTTPException(status_code=403, detail="Usuario inactivo")
+        raise AppError(
+            AUTH_USER_INACTIVE,
+            "Usuario inactivo",
+            status_code=403,
+            detail="Usuario inactivo",
+        )
     audit_log(
         db,
         user=user,
@@ -48,7 +74,10 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)) -
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh(user: User = Depends(get_current_user)) -> TokenResponse:
+def refresh(
+    user: User = Depends(get_current_user),
+    _rate: None = Depends(rate_limit(*REFRESH_RATE_LIMIT)),
+) -> TokenResponse:
     return _token_response(user)
 
 
@@ -59,11 +88,18 @@ def logout(
     db: Session = Depends(get_db),
 ):
     if credentials is None:
-        raise HTTPException(status_code=401, detail="No autenticado")
+        raise AppError(
+            AUTH_NOT_AUTHENTICATED, "No autenticado", status_code=401, detail="No autenticado"
+        )
     try:
         payload = decode_token(credentials.credentials)
     except Exception:
-        raise HTTPException(status_code=401, detail="Token invalido o expirado")
+        raise AppError(
+            AUTH_INVALID_TOKEN,
+            "Token invalido o expirado",
+            status_code=401,
+            detail="Token invalido o expirado",
+        )
     if payload.get("jti") and not token_is_revoked(db, payload.get("jti")):
         user = db.get(User, uuid.UUID(payload["sub"])) if payload.get("sub") else None
         if user is not None:

@@ -37,14 +37,18 @@ class Settings(BaseSettings):
 
     # --- Reglas generales (FASE 40) -------------------------------------------
     default_max_file_size_mb: int = 100
+    allowed_extensions: str = "pdf"
     ocr_languages: str = "spa+eng+por"
+    max_retries: int = 3
     ai_timeout_seconds: int = 120
     dspace_timeout_seconds: int = 120
+    min_confidence_recommended: float = 0.6
     auto_ocr: bool = True
     auto_ai: bool = True
     auto_normalize: bool = True
     auto_validate: bool = True
     default_metadata_schema: str = "snrd-dc"
+    conservation_policies: str = "keep-documents"
     institution: str = ""
     repository: str = ""
 

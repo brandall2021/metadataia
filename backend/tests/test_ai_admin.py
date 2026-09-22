@@ -301,6 +301,28 @@ def test_crear_modelo_proveedor_inexistente_422(client, admin_headers):
     assert r.status_code in (404, 422)
 
 
+def test_crear_modelo_context_window_invalido_422(client, admin_headers):
+    db = SessionLocal()
+    try:
+        provider = _make_provider(db, TEMP_PROVIDER_CODE)
+        try:
+            r = client.post(
+                "/api/admin/ai/models",
+                json={
+                    "provider_id": str(provider.id),
+                    "name": "Modelo Malo",
+                    "model_identifier": "gpt-malo",
+                    "context_window": 0,
+                },
+                headers=admin_headers,
+            )
+            assert r.status_code == 422
+        finally:
+            _delete_provider(provider.id)
+    finally:
+        db.close()
+
+
 def test_actualizar_modelo(client, admin_headers):
     db = SessionLocal()
     try:

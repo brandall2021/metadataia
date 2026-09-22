@@ -12,8 +12,12 @@ const NAV = [
   { href: "/admin", label: "Inicio" },
   { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/metadata", label: "Metadatos" },
+  { href: "/admin/vocabularies", label: "Vocabularios" },
+  { href: "/admin/document-types", label: "Tipos documentales" },
+  { href: "/admin/users", label: "Usuarios" },
   { href: "/admin/ai", label: "Agentes IA" },
   { href: "/admin/repositories", label: "Repositorios" },
+  { href: "/admin/config", label: "Configuración" },
   { href: "/admin/audit", label: "Auditoría" },
 ];
 

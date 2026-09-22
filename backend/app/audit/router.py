@@ -155,5 +155,28 @@ def document_history(
             )
         )
 
+    for run in sorted(doc.extraction_runs, key=lambda r: r.started_at or r.id):
+        agent_version = run.agent_version
+        items.append(
+            HistoryItemOut(
+                type="extraction",
+                id=str(run.id),
+                at=run.started_at or run.finished_at,
+                status=run.status,
+                error=run.error_message,
+                agent_name=agent_version.agent.name if agent_version is not None else None,
+                model_name=run.model.name if run.model is not None else None,
+                version_number=agent_version.version_number if agent_version is not None else None,
+                prompt_hash=run.prompt_hash,
+                input_tokens=run.input_tokens,
+                output_tokens=run.output_tokens,
+                duration_seconds=(
+                    (run.finished_at - run.started_at).total_seconds()
+                    if run.finished_at and run.started_at
+                    else None
+                ),
+            )
+        )
+
     items.sort(key=lambda i: (i.at is not None, i.at), reverse=True)
     return items

@@ -87,6 +87,8 @@ def _fake_call_model(monkeypatch):
         "date": "10/05/2023",
         "language": "Spanish",
         "title": "Auditoria de metadatos automatizada",
+        "type": "Tesis de maestria",
+        "rights": "openAccess",
     }
     monkeypatch.setattr(
         engine,
@@ -240,7 +242,7 @@ def test_extraccion_ia_registra_auditoria(client, stack, admin_headers, cataloga
     entry = entries[0]
     assert entry["new_value"]["agent"]
     assert entry["new_value"]["model"]
-    assert entry["new_value"]["records"] == 4
+    assert entry["new_value"]["records"] == 6
     assert entry["new_value"]["input_tokens"] == 11
     assert entry["new_value"]["output_tokens"] == 22
     _cleanup_doc(doc["id"], catalogador_headers, client)

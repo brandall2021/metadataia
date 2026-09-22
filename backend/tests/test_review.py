@@ -96,7 +96,14 @@ def _fake_with(fields: dict):
 
 @pytest.fixture
 def _fake_call_model(monkeypatch):
-    fields = {"creator": "juan  perez", "date": "10/05/2023", "language": "Spanish", "title": "Titulo original"}
+    fields = {
+        "creator": "juan  perez",
+        "date": "10/05/2023",
+        "language": "Spanish",
+        "title": "Titulo original",
+        "type": "Tesis de maestria",
+        "rights": "openAccess",
+    }
     monkeypatch.setattr(engine, "call_model", _fake_with(fields))
     return None
 

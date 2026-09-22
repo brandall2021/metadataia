@@ -1,8 +1,9 @@
 """Schemas de administracion de IA: proveedores y modelos."""
 
+import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # --- Proveedores -----------------------------------------------------------
@@ -17,6 +18,11 @@ class ProviderCreate(BaseModel):
     active: bool = True
     configuration_json: dict | None = None
 
+    @field_validator("name", "code", "type", "base_url", "api_key")
+    @classmethod
+    def strip_blank(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
 
 class ProviderUpdate(BaseModel):
     name: str | None = None
@@ -26,6 +32,11 @@ class ProviderUpdate(BaseModel):
     api_key: str | None = None
     active: bool | None = None
     configuration_json: dict | None = None
+
+    @field_validator("name", "code", "type", "base_url", "api_key")
+    @classmethod
+    def strip_blank(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
 
 class ProviderOut(BaseModel):
@@ -45,29 +56,39 @@ class ProviderOut(BaseModel):
 
 
 class ModelCreate(BaseModel):
-    provider_id: str
+    provider_id: uuid.UUID
     name: str = Field(min_length=1)
     model_identifier: str = Field(min_length=1)
-    context_window: int | None = None
+    context_window: int | None = Field(default=None, ge=1)
     supports_json: bool = False
     supports_vision: bool = False
-    temperature_default: float | None = None
-    max_tokens_default: int | None = None
+    temperature_default: float | None = Field(default=None, ge=0, le=2)
+    max_tokens_default: int | None = Field(default=None, ge=1)
     active: bool = True
     configuration_json: dict | None = None
 
+    @field_validator("name", "model_identifier")
+    @classmethod
+    def strip_blank(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
 
 class ModelUpdate(BaseModel):
-    provider_id: str | None = None
+    provider_id: uuid.UUID | None = None
     name: str | None = None
     model_identifier: str | None = None
-    context_window: int | None = None
+    context_window: int | None = Field(default=None, ge=1)
     supports_json: bool | None = None
     supports_vision: bool | None = None
-    temperature_default: float | None = None
-    max_tokens_default: int | None = None
+    temperature_default: float | None = Field(default=None, ge=0, le=2)
+    max_tokens_default: int | None = Field(default=None, ge=1)
     active: bool | None = None
     configuration_json: dict | None = None
+
+    @field_validator("name", "model_identifier")
+    @classmethod
+    def strip_blank(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
 
 class ModelOut(BaseModel):
@@ -102,40 +123,55 @@ class AgentCreate(BaseModel):
     name: str = Field(min_length=1)
     code: str = Field(min_length=1)
     description: str | None = None
-    document_type_id: str | None = None
+    document_type_id: uuid.UUID | None = None
     active: bool = True
-    model_id: str
+    model_id: uuid.UUID
     system_prompt: str | None = None
     extraction_prompt: str | None = None
-    temperature: float | None = None
-    max_tokens: int | None = None
+    temperature: float | None = Field(default=None, ge=0, le=2)
+    max_tokens: int | None = Field(default=None, ge=1)
     output_schema_json: dict | None = None
     configuration_json: dict | None = None
+
+    @field_validator("name", "code", "description", "system_prompt", "extraction_prompt")
+    @classmethod
+    def strip_blank(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
 
 class AgentUpdate(BaseModel):
     name: str | None = None
     code: str | None = None
     description: str | None = None
-    document_type_id: str | None = None
+    document_type_id: uuid.UUID | None = None
     active: bool | None = None
-    model_id: str | None = None
+    model_id: uuid.UUID | None = None
     system_prompt: str | None = None
     extraction_prompt: str | None = None
-    temperature: float | None = None
-    max_tokens: int | None = None
+    temperature: float | None = Field(default=None, ge=0, le=2)
+    max_tokens: int | None = Field(default=None, ge=1)
     output_schema_json: dict | None = None
     configuration_json: dict | None = None
+
+    @field_validator("name", "code", "description", "system_prompt", "extraction_prompt")
+    @classmethod
+    def strip_blank(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
 
 class AgentVersionCreate(BaseModel):
-    model_id: str
+    model_id: uuid.UUID
     system_prompt: str | None = None
     extraction_prompt: str | None = None
-    temperature: float | None = None
-    max_tokens: int | None = None
+    temperature: float | None = Field(default=None, ge=0, le=2)
+    max_tokens: int | None = Field(default=None, ge=1)
     output_schema_json: dict | None = None
     configuration_json: dict | None = None
+
+    @field_validator("system_prompt", "extraction_prompt")
+    @classmethod
+    def strip_blank(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
 
 class AgentVersionOut(BaseModel):

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { Bot, Cpu, Database, KeyRound, Layers3, Plus, Power, Sparkles, Trash2, type LucideIcon } from "lucide-react";
+import { Bot, Cpu, Database, KeyRound, Layers3, Plus, Power, Save, Sparkles, Trash2, type LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -19,7 +19,13 @@ type Model = {
   provider_name: string;
   name: string;
   model_identifier: string;
+  context_window: number | null;
+  supports_json: boolean;
+  supports_vision: boolean;
+  temperature_default: number | null;
+  max_tokens_default: number | null;
   active: boolean;
+  configuration_json: Record<string, unknown> | null;
 };
 type AgentVersion = {
   id: string;
@@ -31,6 +37,9 @@ type AgentVersion = {
   extraction_prompt: string | null;
   temperature: number | null;
   max_tokens: number | null;
+  output_schema_json: Record<string, unknown> | null;
+  configuration_json: Record<string, unknown> | null;
+  active: boolean;
   created_at: string;
 };
 type Agent = {
@@ -85,17 +94,37 @@ function MiniStat({ label, value, icon: Icon }: { label: string; value: string; 
   );
 }
 
-function ModelCard({ model }: { model: Model }) {
+function ModelCard({
+  model,
+  onSelect,
+  onToggle,
+  onDelete,
+  onTest,
+  busy,
+  selected,
+}: {
+  model: Model;
+  onSelect: (model: Model) => void;
+  onToggle: (model: Model) => void;
+  onDelete: (model: Model) => void;
+  onTest: (model: Model) => void;
+  busy: boolean;
+  selected: boolean;
+}) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/70 p-4 shadow-sm transition-colors hover:border-primary/25 hover:bg-muted/20">
+    <div
+      className={`rounded-2xl border bg-background/70 p-4 shadow-sm transition-colors hover:border-primary/25 hover:bg-muted/20 ${
+        selected ? "border-primary/35 ring-1 ring-primary/20" : "border-border/70"
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2">
+          <button type="button" className="flex items-center gap-2 text-left" onClick={() => onSelect(model)}>
             <p className="font-medium leading-none">{model.name}</p>
             <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
               {model.provider_name}
             </span>
-          </div>
+          </button>
           <p className="mt-2 font-mono text-xs text-muted-foreground">{model.model_identifier}</p>
         </div>
         <span
@@ -118,6 +147,26 @@ function ModelCard({ model }: { model: Model }) {
             {model.active ? "Listo" : "Pausado"}
           </span>
         </div>
+      </div>
+      <div className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+        <div className="rounded-xl bg-muted/40 px-3 py-2">Contexto: {model.context_window ?? "—"}</div>
+        <div className="rounded-xl bg-muted/40 px-3 py-2">Temp: {model.temperature_default ?? "—"}</div>
+        <div className="rounded-xl bg-muted/40 px-3 py-2">JSON: {model.supports_json ? "sí" : "no"}</div>
+        <div className="rounded-xl bg-muted/40 px-3 py-2">Visión: {model.supports_vision ? "sí" : "no"}</div>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => onSelect(model)}>
+          Editar
+        </Button>
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => onTest(model)}>
+          Probar
+        </Button>
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => onToggle(model)}>
+          {model.active ? "Desactivar" : "Activar"}
+        </Button>
+        <Button size="sm" variant="destructive" disabled={busy} onClick={() => onDelete(model)}>
+          Eliminar
+        </Button>
       </div>
     </div>
   );
@@ -148,9 +197,32 @@ export default function AIPage() {
     base_url: "",
     api_key: "",
   });
+  const [modelForm, setModelForm] = useState({
+    provider_id: "",
+    name: "",
+    model_identifier: "",
+    context_window: "",
+    supports_json: true,
+    supports_vision: false,
+    temperature_default: "",
+    max_tokens_default: "",
+    active: true,
+  });
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [providerKeys, setProviderKeys] = useState<Record<string, string>>({});
   const [providerResults, setProviderResults] = useState<Record<string, string>>({});
   const [providerBusy, setProviderBusy] = useState<Record<string, boolean>>({});
+  const [modelBusy, setModelBusy] = useState<Record<string, boolean>>({});
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [agentVersions, setAgentVersions] = useState<AgentVersion[]>([]);
+  const [versionForm, setVersionForm] = useState({
+    model_id: "",
+    system_prompt: "",
+    extraction_prompt: "",
+    temperature: "",
+    max_tokens: "",
+  });
+  const [versionSaving, setVersionSaving] = useState(false);
   const [modelTest, setModelTest] = useState<{
     ok: boolean;
     message: string;
@@ -239,9 +311,60 @@ export default function AIPage() {
     setError(null);
     try {
       await apiFetch<void>(`/api/admin/ai/agents/${agent.id}`, { method: "DELETE" });
+      if (selectedAgentId === agent.id) {
+        setSelectedAgentId(null);
+        setAgentVersions([]);
+      }
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al eliminar");
+    }
+  }
+
+  async function loadAgentVersions(agentId: string) {
+    const versions = await apiFetch<AgentVersion[]>(`/api/admin/ai/agents/${agentId}/versions`);
+    setAgentVersions(versions);
+    const current = agents.find((agent) => agent.id === agentId)?.current_version ?? null;
+    setVersionForm({
+      model_id: current?.model_id ?? models[0]?.id ?? "",
+      system_prompt: current?.system_prompt ?? "",
+      extraction_prompt: current?.extraction_prompt ?? "",
+      temperature: current?.temperature?.toString() ?? "",
+      max_tokens: current?.max_tokens?.toString() ?? "",
+    });
+  }
+
+  async function selectAgent(agent: Agent) {
+    setSelectedAgentId(agent.id);
+    setError(null);
+    try {
+      await loadAgentVersions(agent.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al cargar versiones");
+    }
+  }
+
+  async function createAgentVersion() {
+    if (!selectedAgentId || !versionForm.model_id) return;
+    setVersionSaving(true);
+    setError(null);
+    try {
+      await apiFetch(`/api/admin/ai/agents/${selectedAgentId}/versions`, {
+        method: "POST",
+        body: JSON.stringify({
+          model_id: versionForm.model_id,
+          system_prompt: versionForm.system_prompt || null,
+          extraction_prompt: versionForm.extraction_prompt || null,
+          temperature: versionForm.temperature ? Number(versionForm.temperature) : null,
+          max_tokens: versionForm.max_tokens ? Number(versionForm.max_tokens) : null,
+        }),
+      });
+      await load();
+      await loadAgentVersions(selectedAgentId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al crear la versión");
+    } finally {
+      setVersionSaving(false);
     }
   }
 
@@ -266,6 +389,157 @@ export default function AIPage() {
       setError(err instanceof Error ? err.message : "Error al crear proveedor");
     } finally {
       setProviderBusy((b) => ({ ...b, create: false }));
+    }
+  }
+
+  function selectModel(model: Model) {
+    setSelectedModelId(model.id);
+    setModelForm({
+      provider_id: model.provider_id,
+      name: model.name,
+      model_identifier: model.model_identifier,
+      context_window: model.context_window?.toString() ?? "",
+      supports_json: model.supports_json,
+      supports_vision: model.supports_vision,
+      temperature_default: model.temperature_default?.toString() ?? "",
+      max_tokens_default: model.max_tokens_default?.toString() ?? "",
+      active: model.active,
+    });
+    setModelTest(null);
+  }
+
+  function clearModelForm() {
+    setSelectedModelId(null);
+    setModelForm({
+      provider_id: providers[0]?.id ?? "",
+      name: "",
+      model_identifier: "",
+      context_window: "",
+      supports_json: true,
+      supports_vision: false,
+      temperature_default: "",
+      max_tokens_default: "",
+      active: true,
+    });
+    setModelTest(null);
+  }
+
+  useEffect(() => {
+    if (!modelForm.provider_id && providers[0]) {
+      setModelForm((prev) => ({ ...prev, provider_id: providers[0].id }));
+    }
+  }, [providers, modelForm.provider_id]);
+
+  async function handleSaveModel(e: FormEvent) {
+    e.preventDefault();
+    if (!modelForm.provider_id) {
+      setError("Seleccioná un proveedor primero");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const payload = {
+        provider_id: modelForm.provider_id,
+        name: modelForm.name.trim(),
+        model_identifier: modelForm.model_identifier.trim(),
+        context_window: modelForm.context_window ? Number(modelForm.context_window) : null,
+        supports_json: modelForm.supports_json,
+        supports_vision: modelForm.supports_vision,
+        temperature_default: modelForm.temperature_default ? Number(modelForm.temperature_default) : null,
+        max_tokens_default: modelForm.max_tokens_default ? Number(modelForm.max_tokens_default) : null,
+        active: modelForm.active,
+      };
+      if (selectedModelId) {
+        await apiFetch<Model>(`/api/admin/ai/models/${selectedModelId}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await apiFetch<Model>("/api/admin/ai/models", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+      }
+      clearModelForm();
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al guardar el modelo");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleModel(model: Model) {
+    setModelBusy((b) => ({ ...b, [model.id]: true }));
+    setError(null);
+    try {
+      await apiFetch<Model>(`/api/admin/ai/models/${model.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ active: !model.active }),
+      });
+      await load();
+      if (selectedModelId === model.id) selectModel({ ...model, active: !model.active });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al actualizar el modelo");
+    } finally {
+      setModelBusy((b) => ({ ...b, [model.id]: false }));
+    }
+  }
+
+  async function deleteModel(model: Model) {
+    if (!window.confirm(`¿Eliminar el modelo "${model.name}"?`)) return;
+    setModelBusy((b) => ({ ...b, [model.id]: true }));
+    setError(null);
+    try {
+      await apiFetch<void>(`/api/admin/ai/models/${model.id}`, { method: "DELETE" });
+      if (selectedModelId === model.id) clearModelForm();
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al eliminar el modelo");
+    } finally {
+      setModelBusy((b) => ({ ...b, [model.id]: false }));
+    }
+  }
+
+  async function testModelById(model: Model) {
+    setModelBusy((b) => ({ ...b, [model.id]: true }));
+    setError(null);
+    try {
+      const res = await apiFetch<{ ok: boolean; message: string; time_ms: number }>(`/api/admin/ai/models/${model.id}/test`, { method: "POST" });
+      setModelTest(res);
+      setSelectedModelId(model.id);
+      selectModel(model);
+    } catch (err) {
+      setModelTest({ ok: false, message: err instanceof Error ? err.message : "Error al probar", time_ms: 0 });
+    } finally {
+      setModelBusy((b) => ({ ...b, [model.id]: false }));
+    }
+  }
+
+  async function cloneAgent(agent: Agent) {
+    setModelBusy((b) => ({ ...b, [agent.id]: true }));
+    setError(null);
+    try {
+      await apiFetch<Agent>(`/api/admin/ai/agents/${agent.id}/clone`, { method: "POST" });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al clonar agente");
+    } finally {
+      setModelBusy((b) => ({ ...b, [agent.id]: false }));
+    }
+  }
+
+  async function testAgent(agent: Agent) {
+    setModelBusy((b) => ({ ...b, [agent.id]: true }));
+    setError(null);
+    try {
+      const res = await apiFetch<{ ok: boolean; message: string; time_ms: number }>(`/api/admin/ai/agents/${agent.id}/test`, { method: "POST" });
+      setError(`${agent.name}: ${res.ok ? "OK" : "Falló"} · ${res.message} (${res.time_ms} ms)`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al probar el agente");
+    } finally {
+      setModelBusy((b) => ({ ...b, [agent.id]: false }));
     }
   }
 
@@ -726,27 +1000,107 @@ export default function AIPage() {
 
         <Card className="border-border/70 shadow-sm">
           <CardHeader className="space-y-2 border-b border-border/60 bg-muted/20">
-            <CardTitle className="text-lg">Modelos cargados</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Cpu className="size-4" />
+              Modelos
+            </CardTitle>
             <CardDescription>
-              Estos son los modelos disponibles para enlazar con agentes.
+              Crea, edita, prueba y desactiva modelos usados por los agentes.
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-0">
-            {models.length > 0 ? (
-              <div className="grid gap-3 p-4 md:grid-cols-2">
-                {models.map((model) => (
-                  <ModelCard key={model.id} model={model} />
-                ))}
+          <CardContent className="p-6">
+            <div className="grid gap-6 xl:grid-cols-[minmax(360px,0.96fr)_1.04fr]">
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium">{selectedModelId ? "Editar modelo" : "Nuevo modelo"}</h3>
+                <form onSubmit={handleSaveModel} className="flex flex-col gap-3 text-sm">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Proveedor</span>
+                    <select className={inputCls} value={modelForm.provider_id} onChange={(e) => setModelForm({ ...modelForm, provider_id: e.target.value })} required>
+                      <option value="" disabled>Seleccionar…</option>
+                      {providers.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Nombre</span>
+                    <input className={inputCls} value={modelForm.name} onChange={(e) => setModelForm({ ...modelForm, name: e.target.value })} required />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Identificador</span>
+                    <input className={inputCls} value={modelForm.model_identifier} onChange={(e) => setModelForm({ ...modelForm, model_identifier: e.target.value })} required />
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Contexto</span>
+                      <input className={inputCls} type="number" value={modelForm.context_window} onChange={(e) => setModelForm({ ...modelForm, context_window: e.target.value })} placeholder="8192" />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Estado</span>
+                      <select className={inputCls} value={modelForm.active ? "true" : "false"} onChange={(e) => setModelForm({ ...modelForm, active: e.target.value === "true" })}>
+                        <option value="true">Activo</option>
+                        <option value="false">Inactivo</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-2 text-sm">
+                      <input type="checkbox" checked={modelForm.supports_json} onChange={(e) => setModelForm({ ...modelForm, supports_json: e.target.checked })} />
+                      JSON
+                    </label>
+                    <label className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-2 text-sm">
+                      <input type="checkbox" checked={modelForm.supports_vision} onChange={(e) => setModelForm({ ...modelForm, supports_vision: e.target.checked })} />
+                      Visión
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Temp. por defecto</span>
+                      <input className={inputCls} type="number" step="0.1" value={modelForm.temperature_default} onChange={(e) => setModelForm({ ...modelForm, temperature_default: e.target.value })} placeholder="0.0" />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Max tokens</span>
+                      <input className={inputCls} type="number" value={modelForm.max_tokens_default} onChange={(e) => setModelForm({ ...modelForm, max_tokens_default: e.target.value })} placeholder="4096" />
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="submit" disabled={saving} className="gap-2">{saving ? "Guardando…" : <><Save className="size-4" /> Guardar modelo</>}</Button>
+                    <Button type="button" variant="outline" onClick={clearModelForm}>Nuevo</Button>
+                    {selectedModelId && <Button type="button" variant="outline" onClick={clearModelForm}>Cancelar edición</Button>}
+                  </div>
+                  {modelTest && (
+                    <p className={`text-xs ${modelTest.ok ? "text-emerald-600" : "text-destructive"}`}>
+                      {modelTest.ok ? "OK" : "Falló"} · {modelTest.message}
+                      {modelTest.time_ms > 0 ? ` (${modelTest.time_ms} ms)` : ""}
+                    </p>
+                  )}
+                </form>
               </div>
-            ) : (
-              <div className="flex min-h-[240px] items-center justify-center p-10 text-center text-sm text-muted-foreground">
-                <div className="max-w-sm space-y-2">
-                  <Cpu className="mx-auto size-8 opacity-40" />
-                  <p>No hay modelos cargados.</p>
-                  <p className="text-xs">Cuando el backend responda con permiso, aparecerán acá.</p>
-                </div>
+
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium">Cargados ({models.length})</h3>
+                {models.length > 0 ? (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {models.map((model) => (
+                      <ModelCard
+                        key={model.id}
+                        model={model}
+                        selected={selectedModelId === model.id}
+                        busy={Boolean(modelBusy[model.id])}
+                        onSelect={selectModel}
+                        onToggle={toggleModel}
+                        onDelete={deleteModel}
+                        onTest={testModelById}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
+                    Sin modelos todavía. Creá el primero con el formulario.
+                  </p>
+                )}
               </div>
-            )}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -801,6 +1155,30 @@ export default function AIPage() {
                     <div className="inline-flex items-center gap-1">
                       <Button
                         variant="ghost"
+                        size="sm"
+                        title="Ver versiones"
+                        onClick={() => void selectAgent(a)}
+                      >
+                        Versiones
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        title="Probar agente"
+                        onClick={() => void testAgent(a)}
+                      >
+                        <Sparkles />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        title="Clonar agente"
+                        onClick={() => void cloneAgent(a)}
+                      >
+                        <Plus />
+                      </Button>
+                      <Button
+                        variant="ghost"
                         size="icon-sm"
                         title={a.active ? "Desactivar" : "Activar"}
                         onClick={() => toggleAgent(a)}
@@ -829,6 +1207,90 @@ export default function AIPage() {
               )}
             </tbody>
           </table>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/70 shadow-sm">
+        <CardHeader className="space-y-2 border-b border-border/60 bg-muted/20">
+          <CardTitle className="text-lg">Versiones del agente</CardTitle>
+          <CardDescription>
+            {selectedAgentId ? "Historial y nueva versión para el agente seleccionado." : "Elegí un agente para ver su historial de versiones."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-6">
+          {selectedAgentId ? (
+            <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium">Nueva versión</h3>
+                <div className="space-y-3 rounded-2xl border border-border/60 bg-background p-4">
+                  <label className="flex flex-col gap-1.5 text-sm">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Modelo</span>
+                    <select className={inputCls} value={versionForm.model_id} onChange={(e) => setVersionForm({ ...versionForm, model_id: e.target.value })} required>
+                      <option value="" disabled>Seleccionar…</option>
+                      {models.map((model) => (
+                        <option key={model.id} value={model.id}>{model.name} · {model.provider_name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1.5 text-sm">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Prompt de sistema</span>
+                    <textarea className={`${inputCls} min-h-20 resize-y`} value={versionForm.system_prompt} onChange={(e) => setVersionForm({ ...versionForm, system_prompt: e.target.value })} />
+                  </label>
+                  <label className="flex flex-col gap-1.5 text-sm">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Prompt de extracción</span>
+                    <textarea className={`${inputCls} min-h-20 resize-y`} value={versionForm.extraction_prompt} onChange={(e) => setVersionForm({ ...versionForm, extraction_prompt: e.target.value })} />
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="flex flex-col gap-1.5 text-sm">
+                      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Temperatura</span>
+                      <input className={inputCls} type="number" step="0.1" value={versionForm.temperature} onChange={(e) => setVersionForm({ ...versionForm, temperature: e.target.value })} />
+                    </label>
+                    <label className="flex flex-col gap-1.5 text-sm">
+                      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Max tokens</span>
+                      <input className={inputCls} type="number" value={versionForm.max_tokens} onChange={(e) => setVersionForm({ ...versionForm, max_tokens: e.target.value })} />
+                    </label>
+                  </div>
+                  <Button type="button" className="gap-2" disabled={versionSaving || !versionForm.model_id} onClick={() => void createAgentVersion()}>
+                    <Save className="size-4" />
+                    {versionSaving ? "Guardando…" : "Crear versión"}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium">Historial</h3>
+                <div className="space-y-3">
+                  {agentVersions.map((version) => (
+                    <div key={version.id} className={`rounded-2xl border p-4 shadow-sm ${version.active ? "border-primary/25 bg-primary/5" : "border-border/60 bg-background"}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium">Versión {version.version_number}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{version.model_name} · {version.model_identifier}</p>
+                        </div>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${version.active ? "bg-emerald-500/15 text-emerald-500" : "bg-muted text-muted-foreground"}`}>
+                          {version.active ? "Activa" : "Histórica"}
+                        </span>
+                      </div>
+                      <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                        <div className="rounded-xl bg-muted/40 px-3 py-2">Temp: {version.temperature ?? "—"}</div>
+                        <div className="rounded-xl bg-muted/40 px-3 py-2">Max tokens: {version.max_tokens ?? "—"}</div>
+                      </div>
+                      {version.system_prompt && <p className="mt-3 line-clamp-3 text-xs text-muted-foreground">{version.system_prompt}</p>}
+                    </div>
+                  ))}
+                  {agentVersions.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-border/70 bg-background p-6 text-sm text-muted-foreground">
+                      Todavía no hay versiones para este agente.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-border/70 bg-background p-6 text-sm text-muted-foreground">
+              Seleccioná un agente desde la lista para ver y crear versiones.
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

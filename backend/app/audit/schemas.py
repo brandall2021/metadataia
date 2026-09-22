@@ -41,3 +41,10 @@ class HistoryItemOut(BaseModel):
     old_value: dict | None = None
     new_value: dict | None = None
     metadata: dict | None = None
+    agent_name: str | None = None
+    model_name: str | None = None
+    version_number: int | None = None
+    prompt_hash: str | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    duration_seconds: float | None = None

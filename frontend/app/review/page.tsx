@@ -26,7 +26,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchBlob } from "@/lib/api";
 import * as documentHelpers from "@/lib/documents";
 
 type DocumentListItem = {
@@ -229,6 +229,7 @@ export default function ReviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [newRecord, setNewRecord] = useState({ field_id: "", value: "", confidence: "0.8" });
   const [updateDrafts, setUpdateDrafts] = useState<Record<string, string>>({});
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   const selectedDoc = review?.detail ?? null;
   const meta = selectedDoc ? documentHelpers.documentStatusMeta(selectedDoc.status) : null;
@@ -283,6 +284,32 @@ export default function ReviewPage() {
   useEffect(() => {
     loadDocuments();
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const current = pdfUrl;
+    if (!selectedDoc) {
+      setPdfUrl(null);
+      return;
+    }
+    apiFetchBlob(`/api/documents/${selectedDoc.id}/download`)
+      .then(({ blob }) => {
+        if (!active) return;
+        const url = URL.createObjectURL(blob);
+        setPdfUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return url;
+        });
+      })
+      .catch(() => {
+        if (active) setPdfUrl(null);
+      });
+    return () => {
+      active = false;
+      if (current) URL.revokeObjectURL(current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDoc?.id]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -349,12 +376,13 @@ export default function ReviewPage() {
     }
   }
 
-  async function reviewAction(action: "approve" | "reject") {
+  async function reviewAction(action: "approve" | "reject" | "deposit") {
     if (!selectedId) return;
     setSaving(action);
     setError(null);
     try {
-      await apiFetch(`/api/documents/${selectedId}/${action}`, { method: "POST" });
+      const path = action === "deposit" ? `/api/documents/${selectedId}/deposit` : `/api/documents/${selectedId}/${action}`;
+      await apiFetch(path, { method: "POST" });
       await loadDocuments();
       await loadDetail(selectedId);
     } catch (err) {
@@ -489,10 +517,34 @@ export default function ReviewPage() {
                       {saving === "approve" ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
                       Aprobar
                     </Button>
+                    <Button variant="outline" size="sm" disabled={saving === "deposit"} onClick={() => void reviewAction("deposit")} className="gap-2">
+                      {saving === "deposit" ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                      Depositar
+                    </Button>
                   </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 xl:grid-cols-[minmax(280px,0.9fr)_1.1fr]">
+                  <div className="rounded-2xl border border-border/70 bg-muted/10 p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">PDF</p>
+                        <p className="mt-1 text-sm text-muted-foreground">Vista previa del documento original.</p>
+                      </div>
+                      {selectedDoc.pages.length > 0 && <Badge tone="primary">{selectedDoc.pages.length} pág.</Badge>}
+                    </div>
+                    <div className="mt-4 overflow-hidden rounded-2xl border border-border/60 bg-background">
+                      {pdfUrl ? (
+                        <iframe title="Vista previa PDF" src={pdfUrl} className="h-[680px] w-full" />
+                      ) : (
+                        <div className="flex h-[680px] items-center justify-center text-sm text-muted-foreground">
+                          Cargando PDF…
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-3">
                   <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
                     <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Evidencia</p>
                     <ul className="mt-3 space-y-2 text-sm">
@@ -658,6 +710,7 @@ export default function ReviewPage() {
                   </div>
                 </div>
               </div>
+            </div>
             ) : loadingDetail ? (
               <div className="flex min-h-[360px] items-center justify-center p-8 text-sm text-muted-foreground">
                 Cargando revisión…

@@ -47,6 +47,7 @@ type Collection = {
 };
 type DocType = { id: string; name: string; code: string };
 type SyncOut = { repository_id: string; communities: number; collections: number };
+type TestOut = { ok: boolean; message: string; time_ms: number; detail?: string | null };
 
 const inputCls =
   "w-full rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus:border-ring focus:bg-muted/50 focus:ring-2 focus:ring-ring/30";
@@ -198,6 +199,21 @@ export default function RepositoriesPage() {
       setError(`Sincronizados ${res.communities} comunidades y ${res.collections} colecciones.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al sincronizar");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function testRepository(repo: Repository) {
+    setBusy(`test:${repo.id}`);
+    setError(null);
+    try {
+      const res = await apiFetch<TestOut>(`/api/admin/repositories/${repo.id}/test`, {
+        method: "POST",
+      });
+      setError(`${res.ok ? "Conexión OK" : "Conexión falló"}: ${res.message}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al probar el repositorio");
     } finally {
       setBusy(null);
     }
@@ -426,11 +442,20 @@ export default function RepositoriesPage() {
                         size="sm"
                         disabled={busy === `sync:${repo.id}`}
                         onClick={() => sync(repo)}
-                      >
+                        >
                         <RefreshCw className={busy === `sync:${repo.id}` ? "animate-spin" : ""} />
                         {busy === `sync:${repo.id}` ? "Sincronizando" : "Sincronizar"}
                       </Button>
                     )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={busy === `test:${repo.id}`}
+                      onClick={() => testRepository(repo)}
+                    >
+                      <Database className={busy === `test:${repo.id}` ? "animate-pulse" : ""} />
+                      {busy === `test:${repo.id}` ? "Probando" : "Probar conexión"}
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon-sm"

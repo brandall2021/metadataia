@@ -14,10 +14,12 @@ from app.review.router import router as review_router
 from app.repositories.router import router as repositories_router
 from app.deposit.router import router as deposit_router
 from app.audit.router import router as audit_router, history_router as audit_history_router
+from app.administration.router import router as administration_router
 from app.dashboard.router import router as dashboard_router
 from app.core import storage
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.errors import AppError, app_error_handler
 from app.users.router import router as users_router
 
 # Defaults de desarrollo: en produccion el arranque debe fallar si se conservan.
@@ -45,7 +47,8 @@ def _ensure_production_guard() -> None:
 
 def create_app() -> FastAPI:
     _ensure_production_guard()
-    storage.ensure_bucket()
+    if settings.storage_backend == "filesystem" or settings.app_env == "production":
+        storage.ensure_bucket()
     app = FastAPI(
         title=settings.app_name,
         version="0.1.0",
@@ -70,6 +73,8 @@ def create_app() -> FastAPI:
         response.headers["X-XSS-Protection"] = "0"
         return response
 
+    app.add_exception_handler(AppError, app_error_handler)
+
     app.include_router(auth_router, prefix="/api")
     app.include_router(users_router, prefix="/api")
     app.include_router(ai_admin_router, prefix="/api")
@@ -84,6 +89,7 @@ def create_app() -> FastAPI:
     app.include_router(audit_router, prefix="/api")
     app.include_router(audit_history_router, prefix="/api")
     app.include_router(dashboard_router, prefix="/api")
+    app.include_router(administration_router, prefix="/api")
 
     @app.get("/health", tags=["core"])
     def health(db: Session = Depends(get_db)) -> dict:

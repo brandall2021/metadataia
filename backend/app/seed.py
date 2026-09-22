@@ -27,6 +27,7 @@ PERMISSIONS = [
     ("admin.vocabularies.manage", "Administrar vocabularios"),
     ("admin.document_types.manage", "Administrar tipos documentales"),
     ("admin.repositories.manage", "Administrar repositorios"),
+    ("admin.settings.manage", "Administrar configuracion global"),
     ("audit.view", "Ver registros de auditoria"),
 ]
 

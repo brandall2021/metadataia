@@ -204,6 +204,7 @@ def _type_out(type_: DocumentType, with_fields: bool = True) -> DocumentTypeOut:
         default_agent_code=agent.code if agent else None,
         default_agent_name=agent.name if agent else None,
         active=type_.active,
+        ocr_languages=type_.ocr_languages,
         created_at=type_.created_at,
         updated_at=type_.updated_at,
         fields=[_field_in_type(l) for l in sorted(type_.metadata_field_links, key=lambda l: (l.order_index or 0, l.metadata_field.display_name or ""))] if with_fields else [],

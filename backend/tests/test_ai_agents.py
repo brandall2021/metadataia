@@ -111,6 +111,19 @@ def test_crear_agente_sin_modelo_422(client, admin_headers):
     assert r.status_code == 422
 
 
+def test_crear_agente_con_modelo_invalido_422(client, admin_headers):
+    r = client.post(
+        "/api/admin/ai/agents",
+        json={
+            "name": "Agente",
+            "code": f"{TEMP_CODE}-uuid-mal",
+            "model_id": "no-es-uuid",
+        },
+        headers=admin_headers,
+    )
+    assert r.status_code == 422
+
+
 def test_crear_agente_ok_con_version_1(client, admin_headers):
     db = SessionLocal()
     try:

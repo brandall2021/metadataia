@@ -17,7 +17,31 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
+from app.administration.service import get_setting
+from app.core.config import settings
+
 OCR_TOOL = "ocrmypdf"
+
+
+def resolve_ocr_languages(db, document, requested: str | None = None) -> str:
+    """Idiomas OCR efectivos para un documento.
+
+    Orden de precedencia:
+      1. ``requested`` explicito del job;
+      2. ``document_type.ocr_languages`` (configurado por tipo documental);
+      3. setting global ``ocr_languages`` (override de DB si existe);
+      4. default de ``core/config.py`` (``spa+eng+por``).
+    """
+    if requested and str(requested).strip():
+        return str(requested).strip()
+    doc_type = getattr(document, "document_type", None)
+    if doc_type is not None and getattr(doc_type, "ocr_languages", None):
+        return str(doc_type.ocr_languages).strip()
+    if db is not None:
+        value = get_setting(db, "ocr_languages", settings.ocr_languages)
+        if value:
+            return str(value)
+    return settings.ocr_languages
 
 
 class OcrError(Exception):

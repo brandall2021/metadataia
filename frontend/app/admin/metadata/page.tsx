@@ -21,6 +21,7 @@ type Schema = {
 type Field = {
   id: string;
   schema_code: string;
+  schema_name?: string;
   element: string;
   qualifier: string | null;
   display_name: string | null;
@@ -36,6 +37,7 @@ export default function MetadataPage() {
   const [fields, setFields] = useState<Field[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [schemaSaving, setSchemaSaving] = useState(false);
   const [form, setForm] = useState({
     schema_id: "",
     element: "",
@@ -45,6 +47,7 @@ export default function MetadataPage() {
     repeatable: false,
     ai_extractable: true,
   });
+  const [schemaForm, setSchemaForm] = useState({ name: "", code: "", namespace: "", description: "" });
 
   async function load() {
     try {
@@ -98,6 +101,58 @@ export default function MetadataPage() {
     }
   }
 
+  async function handleCreateSchema(e: FormEvent) {
+    e.preventDefault();
+    setSchemaSaving(true);
+    setError(null);
+    try {
+      const schema = await apiFetch<Schema>('/api/admin/metadata/schemas', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: schemaForm.name.trim(),
+          code: schemaForm.code.trim(),
+          namespace: schemaForm.namespace.trim() || null,
+          description: schemaForm.description.trim() || null,
+        }),
+      });
+      setSchemaForm({ name: '', code: '', namespace: '', description: '' });
+      setForm((prev) => ({ ...prev, schema_id: schema.id }));
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al crear el esquema');
+    } finally {
+      setSchemaSaving(false);
+    }
+  }
+
+  async function deleteSchema(id: string) {
+    if (!window.confirm('¿Eliminar el esquema?')) return;
+    setSchemaSaving(true);
+    setError(null);
+    try {
+      await apiFetch(`/api/admin/metadata/schemas/${id}`, { method: 'DELETE' });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo eliminar el esquema');
+    } finally {
+      setSchemaSaving(false);
+    }
+  }
+
+  async function deleteField(id: string) {
+    if (!window.confirm('¿Eliminar el campo?')) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await apiFetch(`/api/admin/metadata/fields/${id}`, { method: 'DELETE' });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo eliminar el campo');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -111,6 +166,36 @@ export default function MetadataPage() {
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Nuevo esquema</CardTitle>
+            <CardDescription>
+              Crea un esquema y luego agrega sus campos.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleCreateSchema} className="flex flex-col gap-3 text-sm">
+              <label className="flex flex-col gap-1">
+                Nombre
+                <input className="rounded-lg border border-border bg-background px-3 py-2" value={schemaForm.name} onChange={(e) => setSchemaForm({ ...schemaForm, name: e.target.value })} required />
+              </label>
+              <label className="flex flex-col gap-1">
+                Código
+                <input className="rounded-lg border border-border bg-background px-3 py-2" value={schemaForm.code} onChange={(e) => setSchemaForm({ ...schemaForm, code: e.target.value })} required />
+              </label>
+              <label className="flex flex-col gap-1">
+                Namespace
+                <input className="rounded-lg border border-border bg-background px-3 py-2" value={schemaForm.namespace} onChange={(e) => setSchemaForm({ ...schemaForm, namespace: e.target.value })} placeholder="dc" />
+              </label>
+              <label className="flex flex-col gap-1">
+                Descripción
+                <textarea className="rounded-lg border border-border bg-background px-3 py-2" value={schemaForm.description} onChange={(e) => setSchemaForm({ ...schemaForm, description: e.target.value })} />
+              </label>
+              <Button type="submit" disabled={schemaSaving}>{schemaSaving ? 'Creando…' : 'Crear esquema'}</Button>
+            </form>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Nuevo campo</CardTitle>
@@ -132,10 +217,8 @@ export default function MetadataPage() {
                   <option value="" disabled>
                     Seleccionar…
                   </option>
-                  {schemas.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.code})
-                    </option>
+                {schemas.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
                   ))}
                 </select>
               </label>
@@ -202,6 +285,7 @@ export default function MetadataPage() {
                 <th className="px-3 py-2">Esquema</th>
                 <th className="px-3 py-2">Tipo</th>
                 <th className="px-3 py-2">Requisitos</th>
+                <th className="px-3 py-2" />
               </tr>
             </thead>
             <tbody>
@@ -217,15 +301,43 @@ export default function MetadataPage() {
                       .filter(Boolean)
                       .join(" · ") || "—"}
                   </td>
+                  <td className="px-3 py-2 text-right">
+                    <Button variant="ghost" size="sm" onClick={() => deleteField(f.id)}>Eliminar</Button>
+                  </td>
                 </tr>
               ))}
               {fields.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
                     Sin campos todavía. Cree el primero con el formulario.
                   </td>
                 </tr>
               )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="lg:col-span-3 overflow-hidden rounded-xl ring-1 ring-foreground/10">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2">Nombre</th>
+                <th className="px-3 py-2">Código</th>
+                <th className="px-3 py-2">Namespace</th>
+                <th className="px-3 py-2">Campos</th>
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {schemas.map((s) => (
+                <tr key={s.id} className="border-t">
+                  <td className="px-3 py-2">{s.name}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{s.code}</td>
+                  <td className="px-3 py-2 text-muted-foreground">—</td>
+                  <td className="px-3 py-2 text-muted-foreground">—</td>
+                  <td className="px-3 py-2 text-right"><Button variant="ghost" size="sm" onClick={() => deleteSchema(s.id)}>Eliminar</Button></td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

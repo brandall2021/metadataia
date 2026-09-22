@@ -54,3 +54,10 @@ class RoleUpdate(BaseModel):
 
 class RolePermissionsUpdate(BaseModel):
     permission_codes: list[str]
+
+
+class PermissionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    code: str
+    description: str

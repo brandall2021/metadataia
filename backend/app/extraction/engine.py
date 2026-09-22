@@ -25,6 +25,7 @@ import httpx
 
 from app.ai.client import render_prompt
 from app.core.config import settings
+from app.core.errors import AI_CONNECTION_ERROR, AI_TIMEOUT
 from app.core.security import decrypt_secret
 from app.models import AIAgent, AIAgentVersion, AIProvider, Document
 
@@ -246,7 +247,12 @@ def call_model(
     t0 = time.monotonic()
     client = httpx.Client(transport=transport, timeout=timeout or settings.ai_timeout_seconds)
     try:
-        resp = client.post(url, json=body, headers=headers)
+        try:
+            resp = client.post(url, json=body, headers=headers)
+        except httpx.TimeoutException as exc:
+            raise ExtractionError(f"{AI_TIMEOUT}: timeout al llamar al proveedor de IA") from exc
+        except httpx.HTTPError as exc:
+            raise ExtractionError(f"{AI_CONNECTION_ERROR}: error de conexion al proveedor de IA") from exc
     finally:
         client.close()
     if resp.status_code >= 400:

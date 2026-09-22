@@ -152,6 +152,8 @@ class NormStack:
         self.field_language = self._field(
             "language", "Idioma", data_type="text", vocabulary_id=self.vocab_id
         )
+        self.field_type = self._field("type", "Tipo documental", data_type="text")
+        self.field_rights = self._field("rights", "Derechos de acceso", data_type="text")
 
         r = client.post(
             "/api/admin/document-types",
@@ -170,6 +172,8 @@ class NormStack:
                     {"field_id": self.field_creator},
                     {"field_id": self.field_date},
                     {"field_id": self.field_language},
+                    {"field_id": self.field_type},
+                    {"field_id": self.field_rights},
                 ]
             },
         )
@@ -221,6 +225,9 @@ class NormStack:
                         "creator": {"type": "object"},
                         "date": {"type": "object"},
                         "language": {"type": "object"},
+                        "title": {"type": "object"},
+                        "type": {"type": "object"},
+                        "rights": {"type": "object"},
                     },
                     "required": [],
                 },
