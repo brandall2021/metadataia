@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { Bot, Cpu, Database, Layers3, Plus, Power, Sparkles, Trash2, type LucideIcon } from "lucide-react";
+import { Bot, Cpu, Database, KeyRound, Layers3, Plus, Power, Sparkles, Trash2, type LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -43,6 +43,15 @@ type Agent = {
   current_version: AgentVersion | null;
 };
 type DocType = { id: string; name: string; code: string };
+type Provider = {
+  id: string;
+  name: string;
+  code: string;
+  type: string;
+  base_url: string | null;
+  active: boolean;
+  api_key_masked: string;
+};
 
 const inputCls =
   "w-full rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus:border-ring focus:bg-muted/50 focus:ring-2 focus:ring-ring/30";
@@ -118,6 +127,7 @@ export default function AIPage() {
   const [models, setModels] = useState<Model[]>([]);
   const [docTypes, setDocTypes] = useState<DocType[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [providers, setProviders] = useState<Provider[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -131,20 +141,38 @@ export default function AIPage() {
     temperature: "",
     max_tokens: "",
   });
+  const [providerForm, setProviderForm] = useState({
+    name: "",
+    code: "",
+    type: "openai",
+    base_url: "",
+    api_key: "",
+  });
+  const [providerKeys, setProviderKeys] = useState<Record<string, string>>({});
+  const [providerResults, setProviderResults] = useState<Record<string, string>>({});
+  const [providerBusy, setProviderBusy] = useState<Record<string, boolean>>({});
+  const [modelTest, setModelTest] = useState<{
+    ok: boolean;
+    message: string;
+    time_ms: number;
+  } | null>(null);
+  const [modelTesting, setModelTesting] = useState(false);
 
   const activeModels = models.filter((model) => model.active).length;
   const activeAgents = agents.filter((agent) => agent.active).length;
 
   async function load() {
     try {
-      const [m, d, a] = await Promise.all([
+      const [m, d, a, p] = await Promise.all([
         apiFetch<Model[]>("/api/admin/ai/models"),
         apiFetch<DocType[]>("/api/admin/document-types"),
         apiFetch<Agent[]>("/api/admin/ai/agents"),
+        apiFetch<Provider[]>("/api/admin/ai/providers"),
       ]);
       setModels(m);
       setDocTypes(d);
       setAgents(a);
+      setProviders(p);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar datos");
@@ -217,6 +245,122 @@ export default function AIPage() {
     }
   }
 
+  async function handleCreateProvider(e: FormEvent) {
+    e.preventDefault();
+    setProviderBusy((b) => ({ ...b, create: true }));
+    setError(null);
+    try {
+      await apiFetch<Provider>("/api/admin/ai/providers", {
+        method: "POST",
+        body: JSON.stringify({
+          name: providerForm.name.trim(),
+          code: providerForm.code.trim(),
+          type: providerForm.type,
+          base_url: providerForm.base_url.trim() || null,
+          api_key: providerForm.api_key.trim() || undefined,
+        }),
+      });
+      setProviderForm({ name: "", code: "", type: "openai", base_url: "", api_key: "" });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al crear proveedor");
+    } finally {
+      setProviderBusy((b) => ({ ...b, create: false }));
+    }
+  }
+
+  async function saveProviderKey(p: Provider) {
+    const key = (providerKeys[p.id] ?? "").trim();
+    if (!key) {
+      setProviderResults((r) => ({ ...r, [p.id]: "Escribí una clave para guardar." }));
+      return;
+    }
+    setProviderBusy((b) => ({ ...b, [p.id]: true }));
+    setError(null);
+    try {
+      await apiFetch<Provider>(`/api/admin/ai/providers/${p.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ api_key: key }),
+      });
+      setProviderKeys((k) => ({ ...k, [p.id]: "" }));
+      setProviderResults((r) => ({ ...r, [p.id]: "Clave guardada." }));
+      await load();
+    } catch (err) {
+      setProviderResults((r) => ({ ...r, [p.id]: err instanceof Error ? err.message : "Error al guardar" }));
+    } finally {
+      setProviderBusy((b) => ({ ...b, [p.id]: false }));
+    }
+  }
+
+  async function toggleProvider(p: Provider) {
+    setError(null);
+    try {
+      await apiFetch<Provider>(`/api/admin/ai/providers/${p.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ active: !p.active }),
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al actualizar");
+    }
+  }
+
+  async function deleteProvider(p: Provider) {
+    if (!window.confirm(`¿Eliminar el proveedor "${p.name}"?`)) return;
+    setError(null);
+    try {
+      await apiFetch<void>(`/api/admin/ai/providers/${p.id}`, { method: "DELETE" });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al eliminar");
+    }
+  }
+
+  async function testProvider(p: Provider) {
+    setProviderBusy((b) => ({ ...b, [p.id]: true }));
+    setError(null);
+    try {
+      const res = await apiFetch<{
+        ok: boolean;
+        message: string;
+        time_ms: number;
+        detail?: string | null;
+      }>(`/api/admin/ai/providers/${p.id}/test`, { method: "POST" });
+      setProviderResults((r) => ({
+        ...r,
+        [p.id]: `${res.ok ? "OK" : "Falló"} · ${res.message} (${res.time_ms} ms)`,
+      }));
+    } catch (err) {
+      setProviderResults((r) => ({ ...r, [p.id]: err instanceof Error ? err.message : "Error al probar" }));
+    } finally {
+      setProviderBusy((b) => ({ ...b, [p.id]: false }));
+    }
+  }
+
+  async function testModel() {
+    if (!form.model_id) return;
+    setModelTesting(true);
+    setModelTest(null);
+    setError(null);
+    try {
+      const res = await apiFetch<{
+        ok: boolean;
+        message: string;
+        time_ms: number;
+        detail?: string | null;
+      }>(`/api/admin/ai/models/${form.model_id}/test`, { method: "POST" });
+      setModelTest(res);
+    } catch (err) {
+      setModelTest({
+        ok: false,
+        message: err instanceof Error ? err.message : "Error al probar el modelo",
+        time_ms: 0,
+      });
+    } finally {
+      setModelTesting(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <section className="rounded-3xl border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/40 p-6 shadow-sm">
@@ -248,6 +392,170 @@ export default function AIPage() {
           {error}
         </p>
       )}
+
+      <Card className="border-border/70 shadow-sm">
+        <CardHeader className="space-y-2 border-b border-border/60 bg-muted/20">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <KeyRound className="size-4" />
+            Proveedores de IA
+          </CardTitle>
+          <CardDescription>
+            Conectá proveedores (OpenAI, Anthropic, Ollama…) y cargá la API key que usan sus modelos.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-6">
+          <div className="grid gap-6 xl:grid-cols-[minmax(360px,0.96fr)_1.04fr]">
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium">Nuevo proveedor</h3>
+              <form onSubmit={handleCreateProvider} className="flex flex-col gap-3 text-sm">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                    Nombre
+                  </span>
+                  <input
+                    className={inputCls}
+                    value={providerForm.name}
+                    onChange={(e) => setProviderForm({ ...providerForm, name: e.target.value })}
+                    placeholder="OpenAI"
+                    required
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                    Código
+                  </span>
+                  <input
+                    className={inputCls}
+                    value={providerForm.code}
+                    onChange={(e) => setProviderForm({ ...providerForm, code: e.target.value })}
+                    placeholder="openai"
+                    required
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                    Tipo
+                  </span>
+                  <select
+                    className={inputCls}
+                    value={providerForm.type}
+                    onChange={(e) => setProviderForm({ ...providerForm, type: e.target.value })}
+                  >
+                    <option value="openai">openai</option>
+                    <option value="openai-compatible">openai-compatible</option>
+                    <option value="ollama">ollama</option>
+                    <option value="anthropic">anthropic</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                    Base URL
+                  </span>
+                  <input
+                    className={inputCls}
+                    value={providerForm.base_url}
+                    onChange={(e) => setProviderForm({ ...providerForm, base_url: e.target.value })}
+                    placeholder="https://api.openai.com/v1 (opcional, según tipo)"
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                    API key
+                  </span>
+                  <input
+                    type="password"
+                    className={inputCls}
+                    value={providerForm.api_key}
+                    onChange={(e) => setProviderForm({ ...providerForm, api_key: e.target.value })}
+                    placeholder="sk-… (opcional al crear)"
+                  />
+                </label>
+                <Button type="submit" disabled={providerBusy.create} className="mt-1">
+                  {providerBusy.create ? "Creando…" : "Crear proveedor"}
+                </Button>
+              </form>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium">Cargados ({providers.length})</h3>
+              {providers.length > 0 ? (
+                providers.map((p) => (
+                  <div key={p.id} className="rounded-2xl border border-border/70 bg-background/70 p-4 shadow-sm transition-colors hover:border-primary/25 hover:bg-muted/20">
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium leading-none">{p.name}</p>
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                              {p.type}
+                            </span>
+                            <StatusBadge active={p.active} onClick={() => toggleProvider(p)} />
+                          </div>
+                          <p className="mt-2 font-mono text-xs text-muted-foreground">{p.code}</p>
+                          {p.base_url && <p className="mt-1 text-xs text-muted-foreground">{p.base_url}</p>}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            title={p.active ? "Desactivar" : "Activar"}
+                            onClick={() => toggleProvider(p)}
+                          >
+                            <Power />
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="icon-sm"
+                            title="Eliminar"
+                            onClick={() => deleteProvider(p)}
+                          >
+                            <Trash2 />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                        <label className="flex flex-1 flex-col gap-1">
+                          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                            API key {p.api_key_masked ? `(en uso: ${p.api_key_masked})` : "(sin clave)"}
+                          </span>
+                          <input
+                            type="password"
+                            className={inputCls}
+                            placeholder={p.api_key_masked ? "Nueva clave (vacío = mantener)" : "sk-…"}
+                            value={providerKeys[p.id] ?? ""}
+                            onChange={(e) => setProviderKeys((k) => ({ ...k, [p.id]: e.target.value }))}
+                          />
+                        </label>
+                        <Button size="sm" disabled={providerBusy[p.id]} onClick={() => saveProviderKey(p)}>
+                          Guardar clave
+                        </Button>
+                        <Button size="sm" variant="outline" disabled={providerBusy[p.id]} onClick={() => testProvider(p)}>
+                          Probar conexión
+                        </Button>
+                      </div>
+                      {providerResults[p.id] && (
+                        <p
+                          className={`text-xs ${
+                            providerResults[p.id].startsWith("OK") || providerResults[p.id] === "Clave guardada."
+                              ? "text-emerald-600"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          {providerResults[p.id]}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
+                  Sin proveedores todavía. Creá el primero con el formulario.
+                </p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(360px,0.96fr)_1.04fr]">
         <Card className="h-fit border-border/70 shadow-sm">
@@ -314,26 +622,52 @@ export default function AIPage() {
                   ))}
                 </select>
               </label>
-              <label className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                  Modelo
-                </span>
-                <select
-                  className={inputCls}
-                  value={form.model_id}
-                  onChange={(e) => setForm({ ...form, model_id: e.target.value })}
-                  required
-                >
-                  <option value="" disabled>
-                    Seleccionar…
-                  </option>
-                  {models.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} · {m.provider_name} ({m.model_identifier})
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div>
+                <div className="flex items-end justify-between gap-2">
+                  <label className="flex flex-1 flex-col gap-1.5">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                      Modelo
+                    </span>
+                    <select
+                      className={inputCls}
+                      value={form.model_id}
+                      onChange={(e) => {
+                        setForm({ ...form, model_id: e.target.value });
+                        setModelTest(null);
+                      }}
+                      required
+                    >
+                      <option value="" disabled>
+                        Seleccionar…
+                      </option>
+                      {models.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} · {m.provider_name} ({m.model_identifier})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={modelTesting || !form.model_id}
+                    onClick={testModel}
+                  >
+                    {modelTesting ? "Probando…" : "Probar modelo"}
+                  </Button>
+                </div>
+                {modelTest && (
+                  <p
+                    className={`mt-1.5 text-xs ${
+                      modelTest.ok ? "text-emerald-600" : "text-destructive"
+                    }`}
+                  >
+                    {modelTest.ok ? "OK" : "Falló"} · {modelTest.message}
+                    {modelTest.time_ms > 0 ? ` (${modelTest.time_ms} ms)` : ""}
+                  </p>
+                )}
+              </div>
               <label className="flex flex-col gap-1.5">
                 <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
                   Prompt de sistema
