@@ -62,9 +62,18 @@ const emptyForm = {
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/75 px-4 py-3 shadow-sm">
+    <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm backdrop-blur">
       <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">{label}</div>
       <div className="mt-2 text-xl font-semibold tracking-tight">{value}</div>
+    </div>
+  );
+}
+
+function SignalPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-muted/25 px-3 py-2.5 shadow-sm">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
+      <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
     </div>
   );
 }
@@ -218,32 +227,53 @@ export default function DocumentTypesPage() {
   const selectedFields = selectedType?.fields.length ?? 0;
 
   const fieldOptions = useMemo(() => fields.filter((field) => field.active), [fields]);
+  const selectedCoverage = selectedType ? Math.round((selectedFields / Math.max(fieldOptions.length, 1)) * 100) : 0;
 
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/40 p-6 shadow-sm">
+      <section className="overflow-hidden rounded-[2rem] border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/50 p-6 shadow-[0_24px_90px_-60px_rgba(15,23,42,0.45)]">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-2">
             <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-primary">
               <Layers3 className="size-3.5" />
               Tipos documentales
             </span>
-            <h1 className="text-3xl font-semibold tracking-tight">Tipos documentales</h1>
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Tipos documentales</h1>
             <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
               Armá perfiles documentales y asignales campos, agente IA y idiomas OCR desde una sola pantalla.
             </p>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Perfiles</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Campos</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Agente IA</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">OCR</span>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:min-w-[360px] lg:w-[420px]">
-            <MiniStat label="Tipos" value={String(types.length)} />
-            <MiniStat label="Campos" value={String(selectedFields)} />
+          <div className="grid gap-3 sm:min-w-[360px] lg:w-[420px]">
+            <div className="grid grid-cols-2 gap-3">
+              <MiniStat label="Tipos" value={String(types.length)} />
+              <MiniStat label="Campos" value={String(selectedFields)} />
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Centro de control</p>
+                <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-300">
+                  Activo
+                </span>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <SignalPill label="Campos" value={`${selectedFields} seleccionados`} />
+                <SignalPill label="Cobertura" value={`${selectedCoverage}%`} />
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {error && <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <Card className="border-border/70 shadow-sm">
+      <div className="grid gap-6 xl:grid-cols-[0.98fr_1.02fr]">
+        <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
           <CardHeader className="border-b border-border/60 bg-muted/20">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Plus className="size-4" />
@@ -251,7 +281,7 @@ export default function DocumentTypesPage() {
             </CardTitle>
             <CardDescription>Definí el perfil documental y el agente por defecto.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 p-4">
+          <CardContent className="space-y-4 p-6">
             <form onSubmit={saveType} className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="space-y-1 text-sm">
@@ -306,35 +336,40 @@ export default function DocumentTypesPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/70 shadow-sm">
+        <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
           <CardHeader className="border-b border-border/60 bg-muted/20">
             <CardTitle>Listado</CardTitle>
             <CardDescription>Elegí un tipo para editarlo y asignar sus campos.</CardDescription>
           </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y divide-border/60">
+          <CardContent className="p-4">
+            <div className="grid gap-3">
               {types.map((type) => (
-                <button key={type.id} type="button" onClick={() => selectType(type)} className={`w-full px-4 py-4 text-left transition-colors ${selectedId === type.id ? "bg-primary/5" : "hover:bg-muted/30"}`}>
+                <button
+                  key={type.id}
+                  type="button"
+                  onClick={() => selectType(type)}
+                  className={`w-full rounded-2xl border p-4 text-left shadow-sm transition-colors ${selectedId === type.id ? "border-primary/35 bg-primary/5" : "border-border/70 bg-background/80 hover:border-primary/20 hover:bg-muted/20"}`}
+                >
                   <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="font-medium">{type.name}</p>
-                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-muted-foreground font-mono">{type.code}</p>
-                      <p className="mt-2 text-sm text-muted-foreground line-clamp-2">{type.description ?? "Sin descripción"}</p>
+                    <div className="min-w-0 space-y-1">
+                      <p className="font-medium tracking-tight">{type.name}</p>
+                      <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">{type.code}</p>
+                      <p className="text-sm text-muted-foreground line-clamp-2">{type.description ?? "Sin descripción"}</p>
                     </div>
                     <div className="text-right text-xs text-muted-foreground">
-                      <p>{type.default_agent_name ?? "Sin agente"}</p>
-                      <p>{type.active ? "Activo" : "Inactivo"}</p>
+                      <p className="rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">{type.default_agent_name ?? "Sin agente"}</p>
+                      <p className="mt-2">{type.active ? "Activo" : "Inactivo"}</p>
                     </div>
                   </div>
                 </button>
               ))}
-              {types.length === 0 && <div className="p-6 text-sm text-muted-foreground">Sin tipos documentales todavía.</div>}
+              {types.length === 0 && <div className="rounded-2xl border border-dashed border-border/70 bg-background p-6 text-sm text-muted-foreground">Sin tipos documentales todavía.</div>}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <Card className="border-border/70 shadow-sm">
+      <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
         <CardHeader className="border-b border-border/60 bg-muted/20">
           <CardTitle className="flex items-center gap-2 text-lg">
             <ShieldCheck className="size-4" />
@@ -342,15 +377,32 @@ export default function DocumentTypesPage() {
           </CardTitle>
           <CardDescription>{selectedType ? `${selectedType.name} (${selectedType.fields.length} campos)` : "Seleccioná un tipo para editar sus campos."}</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4 p-4">
+        <CardContent className="space-y-4 p-6">
           {selectedType ? (
             <>
+              <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Cobertura</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {selectedFields} campos visibles de {fieldOptions.length} activos
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                    {selectedCoverage}% completo
+                  </span>
+                </div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted/60">
+                  <div className="h-full rounded-full bg-gradient-to-r from-primary via-primary/70 to-emerald-500" style={{ width: `${selectedCoverage}%` }} />
+                </div>
+              </div>
+
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {fieldOptions.map((field) => {
                   const selected = Boolean(fieldSelection[field.id]);
                   const data = fieldSelection[field.id] ?? { required_override: false, order_index: 0 };
                   return (
-                    <label key={field.id} className={`rounded-2xl border px-4 py-3 text-sm ${selected ? "border-primary/40 bg-primary/5" : "border-border/60 bg-background"}`}>
+                    <label key={field.id} className={`rounded-2xl border px-4 py-3 text-sm shadow-sm ${selected ? "border-primary/40 bg-primary/5" : "border-border/60 bg-background"}`}>
                       <div className="flex items-start gap-2">
                         <input type="checkbox" className="mt-1" checked={selected} onChange={() => toggleField(field.id)} />
                         <div className="min-w-0 flex-1">
