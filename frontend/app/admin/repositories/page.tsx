@@ -67,12 +67,21 @@ function StatusBadge({ active }: { active: boolean }) {
 
 function MiniStat({ label, value, icon: Icon }: { label: string; value: string; icon: LucideIcon }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/75 px-4 py-3 shadow-sm">
+    <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm backdrop-blur">
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
         <Icon className="size-3.5" />
         {label}
       </div>
       <div className="mt-2 text-xl font-semibold tracking-tight">{value}</div>
+    </div>
+  );
+}
+
+function SignalPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-muted/25 px-3 py-2.5 shadow-sm">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
+      <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
     </div>
   );
 }
@@ -97,6 +106,7 @@ export default function RepositoriesPage() {
 
   const activeRepos = repos.filter((repo) => repo.active).length;
   const loadedCollections = Object.values(cols).reduce((acc, list) => acc + list.length, 0);
+  const selectedRepo = expanded ? repos.find((repo) => repo.id === expanded) ?? null : null;
 
   async function loadCollections(repoId: string) {
     try {
@@ -245,7 +255,7 @@ export default function RepositoriesPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/40 p-6 shadow-sm">
+      <section className="overflow-hidden rounded-[2rem] border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/50 p-6 shadow-[0_24px_90px_-60px_rgba(15,23,42,0.45)]">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl space-y-3">
             <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-primary">
@@ -253,18 +263,38 @@ export default function RepositoriesPage() {
               Administración de repositorios
             </span>
             <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-tight">Repositorios</h1>
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Repositorios</h1>
               <p className="max-w-xl text-sm leading-6 text-muted-foreground">
                 Configuración de DSpace, credenciales, sincronización de colecciones y vínculo con
                 tipos documentales.
               </p>
             </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Conexión</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Sincronización</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Colecciones</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Tipos</span>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:min-w-[360px] lg:w-[420px]">
+          <div className="grid gap-3 sm:min-w-[360px] lg:w-[420px]">
+            <div className="grid grid-cols-2 gap-3">
             <MiniStat label="Repositorios" value={`${repos.length}`} icon={Database} />
             <MiniStat label="Activos" value={`${activeRepos}`} icon={Power} />
             <MiniStat label="Colecciones" value={`${loadedCollections}`} icon={Layers3} />
             <MiniStat label="Tipos" value={`${docTypes.length}`} icon={Globe2} />
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Centro de control</p>
+                <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-300">
+                  Operativo
+                </span>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <SignalPill label="Activos" value={`${activeRepos} disponibles`} />
+                <SignalPill label="Colecciones" value={`${loadedCollections} cargadas`} />
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -281,9 +311,9 @@ export default function RepositoriesPage() {
         </p>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(360px,0.96fr)_1.04fr]">
-        <Card className="h-fit border-border/70 shadow-sm">
-          <CardHeader className="space-y-2">
+      <div className="grid gap-6 xl:grid-cols-[minmax(360px,0.9fr)_1.1fr]">
+        <Card className="h-fit overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
+          <CardHeader className="space-y-2 border-b border-border/60 bg-muted/20">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Plus className="size-4" />
               Nuevo repositorio
@@ -292,7 +322,7 @@ export default function RepositoriesPage() {
               La credencial se cifra y solo se muestra enmascarada.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-6">
             <form onSubmit={handleCreate} className="flex flex-col gap-3 text-sm">
               <label className="flex flex-col gap-1.5">
                 <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
@@ -386,16 +416,37 @@ export default function RepositoriesPage() {
           </CardContent>
         </Card>
 
-        <div className="space-y-3">
+        <div className="space-y-4">
+          {selectedRepo && (
+            <div className="rounded-[1.75rem] border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Repositorio expandido</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <h3 className="text-lg font-semibold tracking-tight">{selectedRepo.name}</h3>
+                    <StatusBadge active={selectedRepo.active} />
+                    <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">
+                      {selectedRepo.code}
+                    </span>
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[320px]">
+                  <SignalPill label="Autenticación" value={selectedRepo.authentication_type ?? "Sin definir"} />
+                  <SignalPill label="Usuario" value={selectedRepo.username ?? "—"} />
+                </div>
+              </div>
+            </div>
+          )}
+
           {repos.map((repo) => {
             const open = expanded === repo.id;
             const collections = cols[repo.id] ?? [];
             return (
               <div
                 key={repo.id}
-                className="overflow-hidden rounded-3xl border border-border/70 bg-background/75 shadow-sm transition-colors hover:border-primary/20"
+                className="overflow-hidden rounded-[1.75rem] border border-border/70 bg-background/80 shadow-sm transition-colors hover:border-primary/20"
               >
-                <div className="flex items-start gap-3 p-4">
+                <div className="flex items-start gap-3 p-4 lg:p-5">
                   <button
                     className="flex flex-1 items-start gap-3 rounded-2xl p-2 text-left transition-colors hover:bg-muted/35"
                     onClick={() => toggleExpand(repo.id)}
@@ -407,26 +458,26 @@ export default function RepositoriesPage() {
                     )}
                     <div className="flex-1 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <div className="font-medium">{repo.name}</div>
+                        <div className="font-medium tracking-tight">{repo.name}</div>
                         <StatusBadge active={repo.active} />
                         <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
                           {repo.code}
                         </span>
                       </div>
                       <div className="grid gap-2 text-xs text-muted-foreground md:grid-cols-3">
-                        <div className="rounded-xl bg-muted/40 px-3 py-2">
+                        <div className="rounded-xl bg-muted/35 px-3 py-2">
                           <span className="block text-[10px] uppercase tracking-[0.18em]">URL pública</span>
                           <span className="mt-1 block truncate text-foreground">
                             {repo.base_url ?? "—"}
                           </span>
                         </div>
-                        <div className="rounded-xl bg-muted/40 px-3 py-2">
+                        <div className="rounded-xl bg-muted/35 px-3 py-2">
                           <span className="block text-[10px] uppercase tracking-[0.18em]">API</span>
                           <span className="mt-1 block truncate text-foreground">
                             {repo.api_url ?? "—"}
                           </span>
                         </div>
-                        <div className="rounded-xl bg-muted/40 px-3 py-2">
+                        <div className="rounded-xl bg-muted/35 px-3 py-2">
                           <span className="block text-[10px] uppercase tracking-[0.18em]">Usuario</span>
                           <span className="mt-1 block truncate text-foreground">
                             {repo.username ?? "—"}
@@ -435,7 +486,7 @@ export default function RepositoriesPage() {
                       </div>
                     </div>
                   </button>
-                  <div className="flex shrink-0 items-center gap-1">
+                  <div className="flex shrink-0 flex-wrap items-center gap-1">
                     {repo.active && (
                       <Button
                         variant="outline"
@@ -477,7 +528,7 @@ export default function RepositoriesPage() {
 
                 {open && (
                   <div className="border-t border-border/60 bg-muted/10">
-                    <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                    <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm lg:px-5">
                       <div>
                         <p className="font-medium">Colecciones sincronizadas</p>
                         <p className="text-xs text-muted-foreground">
@@ -537,7 +588,7 @@ export default function RepositoriesPage() {
             );
           })}
           {repos.length === 0 && (
-            <div className="rounded-3xl border border-border/70 bg-background/75 p-10 text-center shadow-sm">
+            <div className="rounded-[1.75rem] border border-border/70 bg-background/80 p-10 text-center shadow-sm backdrop-blur">
               <Database className="mx-auto mb-3 size-10 opacity-35" />
               <p className="text-sm text-muted-foreground">
                 Sin repositorios todavía. Cree el primero con el formulario.
