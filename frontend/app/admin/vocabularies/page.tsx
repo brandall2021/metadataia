@@ -42,9 +42,32 @@ const emptyValueForm = { code: "", label: "", normalized_value: "", synonyms: ""
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/75 px-4 py-3 shadow-sm">
+    <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm backdrop-blur">
       <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">{label}</div>
       <div className="mt-2 text-xl font-semibold tracking-tight">{value}</div>
+    </div>
+  );
+}
+
+function SignalPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-muted/25 px-3 py-2.5 shadow-sm">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
+      <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
+    </div>
+  );
+}
+
+function CoverageBar({ value, label }: { value: number; label: string }) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
+        <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">{value}%</span>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted/60">
+        <div className="h-full rounded-full bg-gradient-to-r from-primary via-primary/70 to-emerald-500" style={{ width: `${value}%` }} />
+      </div>
     </div>
   );
 }
@@ -278,32 +301,55 @@ export default function VocabulariesPage() {
   }
 
   const selectedCount = selectedVocabulary?.value_count ?? 0;
+  const selectedActiveValues = values.filter((value) => value.active).length;
+  const selectedNormalizedValues = values.filter((value) => Boolean(value.normalized_value)).length;
+  const selectedCoverage = values.length > 0 ? Math.round((selectedActiveValues / values.length) * 100) : 0;
 
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/40 p-6 shadow-sm">
+      <section className="overflow-hidden rounded-[2rem] border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/50 p-6 shadow-[0_24px_90px_-60px_rgba(15,23,42,0.45)]">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-2">
             <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-primary">
               <Languages className="size-3.5" />
               Vocabularios
             </span>
-            <h1 className="text-3xl font-semibold tracking-tight">Vocabularios</h1>
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Vocabularios</h1>
             <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
               Cargá valores controlados, importá CSV y probá la normalización desde la misma pantalla.
             </p>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Valores controlados</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Importación CSV</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Normalización</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Sinónimos</span>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:min-w-[360px] lg:w-[420px]">
-            <MiniStat label="Vocabularios" value={String(vocabularies.length)} />
-            <MiniStat label="Valores" value={String(selectedCount)} />
+          <div className="grid gap-3 sm:min-w-[360px] lg:w-[420px]">
+            <div className="grid grid-cols-2 gap-3">
+              <MiniStat label="Vocabularios" value={String(vocabularies.length)} />
+              <MiniStat label="Valores" value={String(selectedCount)} />
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Centro de control</p>
+                <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-300">
+                  Activo
+                </span>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <SignalPill label="Activos" value={`${selectedActiveValues} valores`} />
+                <SignalPill label="Normalizados" value={`${selectedNormalizedValues} valores`} />
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {error && <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <Card className="border-border/70 shadow-sm">
+      <div className="grid gap-6 xl:grid-cols-[0.96fr_1.04fr]">
+        <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
           <CardHeader className="border-b border-border/60 bg-muted/20">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Plus className="size-4" />
@@ -311,7 +357,7 @@ export default function VocabulariesPage() {
             </CardTitle>
             <CardDescription>Creá o actualizá el vocabulario seleccionado.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 p-4">
+          <CardContent className="space-y-4 p-6">
             <form onSubmit={handleSaveVocabulary} className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="space-y-1 text-sm">
@@ -390,41 +436,48 @@ export default function VocabulariesPage() {
         </Card>
 
         <div className="space-y-6">
-          <Card className="border-border/70 shadow-sm">
+          <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
             <CardHeader className="border-b border-border/60 bg-muted/20">
               <CardTitle>Lista</CardTitle>
               <CardDescription>Seleccioná un vocabulario para editarlo.</CardDescription>
             </CardHeader>
-            <CardContent className="p-0">
-              <div className="divide-y divide-border/60">
+            <CardContent className="p-4">
+              <div className="grid gap-3">
                 {vocabularies.map((vocab) => (
-                  <button key={vocab.id} type="button" onClick={() => selectVocabulary(vocab)} className={`w-full px-4 py-4 text-left transition-colors ${selectedId === vocab.id ? "bg-primary/5" : "hover:bg-muted/30"}`}>
+                  <button
+                    key={vocab.id}
+                    type="button"
+                    onClick={() => selectVocabulary(vocab)}
+                    className={`w-full rounded-2xl border p-4 text-left shadow-sm transition-colors ${selectedId === vocab.id ? "border-primary/35 bg-primary/5" : "border-border/70 bg-background/80 hover:border-primary/20 hover:bg-muted/20"}`}
+                  >
                     <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="font-medium">{vocab.name}</p>
-                        <p className="mt-1 text-xs uppercase tracking-[0.18em] text-muted-foreground font-mono">{vocab.code}</p>
-                        <p className="mt-2 text-sm text-muted-foreground line-clamp-2">{vocab.description ?? "Sin descripción"}</p>
+                      <div className="min-w-0 space-y-1">
+                        <p className="font-medium tracking-tight">{vocab.name}</p>
+                        <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">{vocab.code}</p>
+                        <p className="text-sm text-muted-foreground line-clamp-2">{vocab.description ?? "Sin descripción"}</p>
                       </div>
                       <div className="text-right text-xs text-muted-foreground">
-                        <p>{vocab.value_count} valores</p>
-                        <p>{vocab.active ? "Activo" : "Inactivo"}</p>
+                        <p className="rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">{vocab.value_count} valores</p>
+                        <p className="mt-2">{vocab.active ? "Activo" : "Inactivo"}</p>
                       </div>
                     </div>
                   </button>
                 ))}
-                {vocabularies.length === 0 && <div className="p-6 text-sm text-muted-foreground">Sin vocabularios todavía.</div>}
+                {vocabularies.length === 0 && <div className="rounded-2xl border border-dashed border-border/70 bg-background p-6 text-sm text-muted-foreground">Sin vocabularios todavía.</div>}
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-border/70 shadow-sm">
+          <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
             <CardHeader className="border-b border-border/60 bg-muted/20">
               <CardTitle>Valores</CardTitle>
               <CardDescription>{selectedVocabulary ? `${selectedVocabulary.name} (${values.length} valores)` : "Seleccioná un vocabulario para ver sus valores."}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4 p-4">
+            <CardContent className="space-y-4 p-6">
               {selectedVocabulary && (
-                <form onSubmit={(e) => { e.preventDefault(); void saveValue(); }} className="grid gap-3 rounded-2xl border border-border/60 bg-background p-4">
+                <>
+                  <CoverageBar value={selectedCoverage} label="Cobertura del vocabulario" />
+                  <form onSubmit={(e) => { e.preventDefault(); void saveValue(); }} className="grid gap-3 rounded-2xl border border-border/60 bg-background p-4 shadow-sm">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <input className={inputCls} placeholder="Código" value={valueForm.code} onChange={(e) => setValueForm({ ...valueForm, code: e.target.value })} required />
                     <input className={inputCls} placeholder="Etiqueta" value={valueForm.label} onChange={(e) => setValueForm({ ...valueForm, label: e.target.value })} required />
@@ -439,14 +492,24 @@ export default function VocabulariesPage() {
                     <Plus className="size-4" />
                     {savingValue ? "Guardando…" : "Agregar valor"}
                   </Button>
-                </form>
+                  </form>
+                </>
               )}
 
               <div className="space-y-3">
                 {values.map((value) => {
                   const draft = valueDrafts[value.id] ?? { code: value.code, label: value.label, normalized_value: value.normalized_value ?? "", synonyms: value.synonyms.join("\n"), active: value.active };
                   return (
-                    <div key={value.id} className="rounded-2xl border border-border/60 bg-background p-4">
+                    <div key={value.id} className="rounded-2xl border border-border/60 bg-background p-4 shadow-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-medium">{draft.label}</p>
+                          <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">{draft.code}</p>
+                        </div>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${draft.active ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300" : "bg-muted text-muted-foreground"}`}>
+                          {draft.active ? "Activo" : "Inactivo"}
+                        </span>
+                      </div>
                       <div className="grid gap-3 sm:grid-cols-2">
                         <input className={inputCls} value={draft.code} onChange={(e) => setValueDrafts((prev) => ({ ...prev, [value.id]: { ...draft, code: e.target.value } }))} />
                         <input className={inputCls} value={draft.label} onChange={(e) => setValueDrafts((prev) => ({ ...prev, [value.id]: { ...draft, label: e.target.value } }))} />
