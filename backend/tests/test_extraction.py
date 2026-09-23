@@ -342,6 +342,36 @@ def test_call_model_envia_body_json_y_soporta_response_format():
     assert result["output_tokens"] == 5
 
 
+def test_call_model_gpt5_usa_max_completion_tokens():
+    provider = AIProvider(
+        name="OpenAI",
+        code=f"p-{uuid.uuid4().hex[:6]}",
+        type="openai",
+        base_url="https://api.openai.com/v1",
+        api_key_encrypted=None,
+    )
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '{"ok": true}'}}], "usage": {"prompt_tokens": 10, "completion_tokens": 5}},
+        )
+
+    result = engine.call_model(
+        provider,
+        "gpt-5.4",
+        "system prompt",
+        "user prompt",
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert captured["body"]["max_completion_tokens"] == 2000
+    assert "max_tokens" not in captured["body"]
+    assert result["content"] == '{"ok": true}'
+
+
 def test_call_model_error_http_levanta_extraction_error():
     provider = AIProvider(
         name="Mock", code=f"p-{uuid.uuid4().hex[:6]}", type="openai-compatible",

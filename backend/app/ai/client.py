@@ -44,6 +44,17 @@ def _base(base_url: str | None, provider_type: str) -> str:
     return (base_url or DEFAULT_BASE_URLS.get(provider_type, "")).rstrip("/")
 
 
+def completion_tokens_key(provider_type: str, model_identifier: str) -> str:
+    """Devuelve el nombre del parametro de tokens de salida para el modelo.
+
+    Los modelos OpenAI mas nuevos (p. ej. gpt-5) usan `max_completion_tokens`.
+    El resto de proveedores/modelos siguen con `max_tokens`.
+    """
+    if provider_type == "openai" and re.match(r"^(gpt-5|o1|o3)", model_identifier, re.IGNORECASE):
+        return "max_completion_tokens"
+    return "max_tokens"
+
+
 def _error_result(start: float, message: str, detail: str | None = None) -> dict:
     return {
         "ok": False,
@@ -155,7 +166,11 @@ def test_agent_prompt(
         if system_message:
             messages.append({"role": "system", "content": system_message})
         messages.append({"role": "user", "content": user_message})
-        body = {"model": model_identifier, "max_tokens": max_tokens or 100, "messages": messages}
+        body = {
+            "model": model_identifier,
+            completion_tokens_key(provider_type, model_identifier): max_tokens or 100,
+            "messages": messages,
+        }
     try:
         with _http() as client:
             resp = client.post(url, json=body, headers=headers)
@@ -202,9 +217,10 @@ def test_model(
         }
     else:
         url = f"{base}/chat/completions"
+        max_tokens_key = completion_tokens_key(provider_type, model_identifier)
         body = {
             "model": model_identifier,
-            "max_tokens": max_tokens or 5,
+            max_tokens_key: max_tokens or 5,
             "messages": [{"role": "user", "content": "ping"}],
         }
     try:

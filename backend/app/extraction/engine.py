@@ -23,7 +23,7 @@ from typing import Any
 
 import httpx
 
-from app.ai.client import render_prompt
+from app.ai.client import completion_tokens_key, render_prompt
 from app.core.config import settings
 from app.core.errors import AI_CONNECTION_ERROR, AI_TIMEOUT
 from app.core.security import decrypt_secret
@@ -235,10 +235,11 @@ def call_model(
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": user})
+        token_key = completion_tokens_key(provider.type, model_identifier)
         body = {
             "model": model_identifier,
             "temperature": temperature,
-            "max_tokens": max_tokens,
+            token_key: max_tokens,
             "messages": messages,
         }
         if supports_json:

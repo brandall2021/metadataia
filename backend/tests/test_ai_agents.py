@@ -439,3 +439,33 @@ def test_render_prompt_variables_conocidas_y_desconocidas():
     assert "EL TEXTO DEL PDF" in rendered
     assert "es" in rendered
     assert "{{desconocida}}" in rendered  # se deja intacta, no se inventa
+
+
+def test_test_model_gpt5_usa_max_completion_tokens(monkeypatch):
+    calls = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json
+
+        calls["body"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "pong"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        )
+
+    _mock_http(monkeypatch, handler)
+
+    result = ai_client.test_model(
+        "http://example.test",
+        None,
+        "gpt-5.4",
+        provider_type="openai",
+        max_tokens=7,
+    )
+
+    assert result["ok"] is True
+    assert calls["body"]["max_completion_tokens"] == 7
+    assert "max_tokens" not in calls["body"]
