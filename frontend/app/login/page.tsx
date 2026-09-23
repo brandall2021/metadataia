@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { apiFetch, API_URL, setToken } from "@/lib/api";
+import { apiFetch, setToken } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -73,9 +73,6 @@ export default function LoginPage() {
               {loading ? "Ingresando…" : "Ingresar"}
             </Button>
           </form>
-          <p className="mt-4 text-xs text-muted-foreground">
-            API: {API_URL}
-          </p>
         </CardContent>
       </Card>
     </main>
