@@ -278,10 +278,10 @@ export default function RepositoriesPage() {
           </div>
           <div className="grid gap-3 sm:min-w-[360px] lg:w-[420px]">
             <div className="grid grid-cols-2 gap-3">
-            <MiniStat label="Repositorios" value={`${repos.length}`} icon={Database} />
-            <MiniStat label="Activos" value={`${activeRepos}`} icon={Power} />
-            <MiniStat label="Colecciones" value={`${loadedCollections}`} icon={Layers3} />
-            <MiniStat label="Tipos" value={`${docTypes.length}`} icon={Globe2} />
+              <MiniStat label="Repositorios" value={`${repos.length}`} icon={Database} />
+              <MiniStat label="Activos" value={`${activeRepos}`} icon={Power} />
+              <MiniStat label="Colecciones" value={`${loadedCollections}`} icon={Layers3} />
+              <MiniStat label="Tipos" value={`${docTypes.length}`} icon={Globe2} />
             </div>
             <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
               <div className="flex items-center justify-between gap-3">

@@ -220,6 +220,7 @@ export default function AuditPage() {
 
       {data && (
         <div className="overflow-hidden rounded-[1.75rem] border border-border/70 shadow-sm">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-xs uppercase tracking-[0.16em] text-muted-foreground">
               <tr>
@@ -274,6 +275,7 @@ export default function AuditPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

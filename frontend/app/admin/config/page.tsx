@@ -119,9 +119,9 @@ export default function ConfigPage() {
               Configuración global
             </span>
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Configuración global</h1>
-          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-            Ajustes administrables del sistema: OCR, IA, tamaños máximos y políticas generales.
-          </p>
+            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+              Ajustes administrables del sistema: OCR, IA, tamaños máximos y políticas generales.
+            </p>
             <div className="flex flex-wrap gap-2">
               <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Overrides</span>
               <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Entorno</span>

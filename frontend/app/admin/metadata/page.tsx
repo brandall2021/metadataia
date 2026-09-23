@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
+import { BookMarked, Database, FileText, Layers3, Sparkles } from "lucide-react";
 
 type Schema = {
   id: string;
@@ -66,6 +67,14 @@ export default function MetadataPage() {
   useEffect(() => {
     load();
   }, []);
+
+  const fieldCountBySchema = fields.reduce<Record<string, number>>((acc, field) => {
+    acc[field.schema_code] = (acc[field.schema_code] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const requiredCount = fields.filter((field) => field.required).length;
+  const aiExtractableCount = fields.filter((field) => field.ai_extractable).length;
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
@@ -155,26 +164,72 @@ export default function MetadataPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Metadatos</h1>
-        <p className="text-sm text-muted-foreground">
-          Campos de metadatos. Un campo creado aparece aquí y en los
-          formularios de documentos automáticamente, sin modificar código.
-        </p>
-      </div>
+      <section className="overflow-hidden rounded-[2rem] border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/50 p-6 shadow-[0_24px_90px_-60px_rgba(15,23,42,0.45)]">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-3">
+            <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-primary">
+              <BookMarked className="size-3.5" />
+              Catálogo de metadatos
+            </span>
+            <div className="space-y-2">
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Metadatos</h1>
+              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                Campos de metadatos. Un campo creado aparece aquí y en los formularios de documentos automáticamente, sin modificar código.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 shadow-sm">Esquemas</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 shadow-sm">Campos</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 shadow-sm">Carga dinámica</span>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:min-w-[360px] lg:w-[420px]">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                  <Database className="size-3.5" />
+                  Esquemas
+                </div>
+                <div className="mt-2 text-xl font-semibold tracking-tight">{schemas.length}</div>
+              </div>
+              <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                  <FileText className="size-3.5" />
+                  Campos
+                </div>
+                <div className="mt-2 text-xl font-semibold tracking-tight">{fields.length}</div>
+              </div>
+              <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                  <Sparkles className="size-3.5" />
+                  IA extractable
+                </div>
+                <div className="mt-2 text-xl font-semibold tracking-tight">{aiExtractableCount}</div>
+              </div>
+              <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                  <Layers3 className="size-3.5" />
+                  Obligatorios
+                </div>
+                <div className="mt-2 text-xl font-semibold tracking-tight">{requiredCount}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Nuevo esquema</CardTitle>
-            <CardDescription>
-              Crea un esquema y luego agrega sus campos.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleCreateSchema} className="flex flex-col gap-3 text-sm">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <div className="space-y-6">
+          <Card className="overflow-hidden rounded-[1.5rem] border-border/70 shadow-sm">
+            <CardHeader className="border-b border-border/60 bg-muted/20">
+              <CardTitle className="text-base">Nuevo esquema</CardTitle>
+              <CardDescription>Crea un esquema y luego agrega sus campos.</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <form onSubmit={handleCreateSchema} className="flex flex-col gap-3 text-sm">
               <label className="flex flex-col gap-1">
                 Nombre
                 <input className="rounded-lg border border-border bg-background px-3 py-2" value={schemaForm.name} onChange={(e) => setSchemaForm({ ...schemaForm, name: e.target.value })} required />
@@ -191,21 +246,20 @@ export default function MetadataPage() {
                 Descripción
                 <textarea className="rounded-lg border border-border bg-background px-3 py-2" value={schemaForm.description} onChange={(e) => setSchemaForm({ ...schemaForm, description: e.target.value })} />
               </label>
-              <Button type="submit" disabled={schemaSaving}>{schemaSaving ? 'Creando…' : 'Crear esquema'}</Button>
-            </form>
-          </CardContent>
-        </Card>
+                <Button type="submit" disabled={schemaSaving}>{schemaSaving ? 'Creando…' : 'Crear esquema'}</Button>
+              </form>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Nuevo campo</CardTitle>
-            <CardDescription>
-              El formulario de carga lo construirá dinámicamente según estos
-              atributos.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleCreate} className="flex flex-col gap-3 text-sm">
+          <Card className="overflow-hidden rounded-[1.5rem] border-border/70 shadow-sm">
+            <CardHeader className="border-b border-border/60 bg-muted/20">
+              <CardTitle className="text-base">Nuevo campo</CardTitle>
+              <CardDescription>
+                El formulario de carga lo construirá dinámicamente según estos atributos.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <form onSubmit={handleCreate} className="flex flex-col gap-3 text-sm">
               <label className="flex flex-col gap-1">
                 Esquema
                 <select
@@ -268,78 +322,101 @@ export default function MetadataPage() {
                   </label>
                 ))}
               </div>
-              <Button type="submit" disabled={saving || !form.schema_id}>
-                {saving ? "Creando…" : "Crear campo"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <div className="lg:col-span-2 overflow-hidden rounded-xl ring-1 ring-foreground/10">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2">Etiqueta</th>
-                <th className="px-3 py-2">Elemento</th>
-                <th className="px-3 py-2">Qualifier</th>
-                <th className="px-3 py-2">Esquema</th>
-                <th className="px-3 py-2">Tipo</th>
-                <th className="px-3 py-2">Requisitos</th>
-                <th className="px-3 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {fields.map((f) => (
-                <tr key={f.id} className="border-t">
-                  <td className="px-3 py-2">{f.display_name ?? f.element}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{f.element}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{f.qualifier ?? "—"}</td>
-                  <td className="px-3 py-2">{f.schema_code}</td>
-                  <td className="px-3 py-2">{f.data_type}</td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">
-                    {[f.required && "oblig.", f.repeatable && "repetible", f.ai_extractable && "IA"]
-                      .filter(Boolean)
-                      .join(" · ") || "—"}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <Button variant="ghost" size="sm" onClick={() => deleteField(f.id)}>Eliminar</Button>
-                  </td>
-                </tr>
-              ))}
-              {fields.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
-                    Sin campos todavía. Cree el primero con el formulario.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                <Button type="submit" disabled={saving || !form.schema_id}>
+                  {saving ? "Creando…" : "Crear campo"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
         </div>
 
-        <div className="lg:col-span-3 overflow-hidden rounded-xl ring-1 ring-foreground/10">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2">Nombre</th>
-                <th className="px-3 py-2">Código</th>
-                <th className="px-3 py-2">Namespace</th>
-                <th className="px-3 py-2">Campos</th>
-                <th className="px-3 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {schemas.map((s) => (
-                <tr key={s.id} className="border-t">
-                  <td className="px-3 py-2">{s.name}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{s.code}</td>
-                  <td className="px-3 py-2 text-muted-foreground">—</td>
-                  <td className="px-3 py-2 text-muted-foreground">—</td>
-                  <td className="px-3 py-2 text-right"><Button variant="ghost" size="sm" onClick={() => deleteSchema(s.id)}>Eliminar</Button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-6">
+          <Card className="overflow-hidden rounded-[1.5rem] border-border/70 shadow-sm">
+            <CardHeader className="border-b border-border/60 bg-muted/20">
+              <CardTitle className="text-base">Campos</CardTitle>
+              <CardDescription>Definiciones que alimentan los formularios dinámicos.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3">Etiqueta</th>
+                      <th className="px-4 py-3">Elemento</th>
+                      <th className="px-4 py-3">Qualifier</th>
+                      <th className="px-4 py-3">Esquema</th>
+                      <th className="px-4 py-3">Tipo</th>
+                      <th className="px-4 py-3">Requisitos</th>
+                      <th className="px-4 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fields.map((f) => (
+                      <tr key={f.id} className="border-t">
+                        <td className="px-4 py-3">{f.display_name ?? f.element}</td>
+                        <td className="px-4 py-3 font-mono text-xs">{f.element}</td>
+                        <td className="px-4 py-3 font-mono text-xs">{f.qualifier ?? "—"}</td>
+                        <td className="px-4 py-3">{f.schema_code}</td>
+                        <td className="px-4 py-3">{f.data_type}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">
+                          {[f.required && "oblig.", f.repeatable && "repetible", f.ai_extractable && "IA"]
+                            .filter(Boolean)
+                            .join(" · ") || "—"}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button variant="ghost" size="sm" onClick={() => deleteField(f.id)}>
+                            Eliminar
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {fields.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                          Sin campos todavía. Cree el primero con el formulario.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden rounded-[1.5rem] border-border/70 shadow-sm">
+            <CardHeader className="border-b border-border/60 bg-muted/20">
+              <CardTitle className="text-base">Esquemas</CardTitle>
+              <CardDescription>Base semántica usada por los campos del formulario.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3">Nombre</th>
+                      <th className="px-4 py-3">Código</th>
+                      <th className="px-4 py-3">Campos</th>
+                      <th className="px-4 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {schemas.map((s) => (
+                      <tr key={s.id} className="border-t">
+                        <td className="px-4 py-3">{s.name}</td>
+                        <td className="px-4 py-3 font-mono text-xs">{s.code}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{fieldCountBySchema[s.code] ?? 0}</td>
+                        <td className="px-4 py-3 text-right">
+                          <Button variant="ghost" size="sm" onClick={() => deleteSchema(s.id)}>
+                            Eliminar
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
