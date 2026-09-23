@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.core.database import Base, SessionLocal
 from app.main import app
-from app.models import Role, User
+from app.models import DocumentType, Role, User
 
 EXPECTED_TABLES = {
     "users",
@@ -74,4 +74,16 @@ def test_roundtrip_usuario_con_rol():
     finally:
         db.query(User).filter_by(username="test_roundtrip").delete()
         db.commit()
+        db.close()
+
+
+def test_seed_carga_tipos_documentales_basicos():
+    db = SessionLocal()
+    try:
+        types = db.query(DocumentType).order_by(DocumentType.code).all()
+        codes = {type_.code for type_ in types}
+        assert "tesis" in codes
+        assert "articulo" in codes
+        assert len(types) >= 3
+    finally:
         db.close()

@@ -15,6 +15,7 @@ from app.models import (
     AIAgentVersion,
     AIModel,
     AIProvider,
+    DocumentType,
     MetadataField,
     MetadataSchema,
     Permission,
@@ -113,6 +114,21 @@ RIDUNT_VOCABULARIES = [
             {"code": "closedAccess", "label": "Closed Access", "normalized_value": "closedAccess", "synonyms": ["closed", "private"]},
         ],
     },
+]
+
+RIDUNT_DOCUMENT_TYPES = [
+    {"code": "tesis", "name": "Tesis", "description": "Trabajos de tesis y disertaciones."},
+    {"code": "articulo", "name": "Articulo", "description": "Articulos cientificos y tecnicos."},
+    {"code": "libro", "name": "Libro", "description": "Libros y monografias."},
+    {"code": "capitulo_libro", "name": "Capitulo de libro", "description": "Capitulos de libros."},
+    {"code": "informe", "name": "Informe", "description": "Informes tecnicos o institucionales."},
+    {"code": "ponencia", "name": "Ponencia", "description": "Ponencias y trabajos de congreso."},
+    {"code": "preprint", "name": "Preprint", "description": "Versiones preliminares de articulos."},
+    {"code": "dataset", "name": "Dataset", "description": "Conjuntos de datos de investigacion."},
+    {"code": "software", "name": "Software", "description": "Software, codigo o aplicaciones."},
+    {"code": "imagen", "name": "Imagen", "description": "Imagenes, figuras y material grafico."},
+    {"code": "audio", "name": "Audio", "description": "Archivos y materiales de audio."},
+    {"code": "video", "name": "Video", "description": "Archivos y materiales audiovisuales."},
 ]
 
 RIDUNT_FIELD_VOCABULARIES = {
@@ -468,6 +484,24 @@ def _upsert_ridunt_vocabularies(db: Session) -> None:
                 value.active = True
 
 
+def _upsert_ridunt_document_types(db: Session) -> None:
+    for type_data in RIDUNT_DOCUMENT_TYPES:
+        type_ = db.query(DocumentType).filter_by(code=type_data["code"]).one_or_none()
+        if type_ is None:
+            type_ = DocumentType(
+                name=type_data["name"],
+                code=type_data["code"],
+                description=type_data["description"],
+                active=True,
+            )
+            db.add(type_)
+            continue
+
+        type_.name = type_data["name"]
+        type_.description = type_data["description"]
+        type_.active = True
+
+
 def _upsert_ridunt_ai_seed(db: Session) -> None:
     provider = db.query(AIProvider).filter_by(code="ridunt-local").one_or_none()
     if provider is None:
@@ -641,6 +675,7 @@ def run(db: Session) -> None:
     _upsert_ridunt_repository(db)
     _upsert_ridunt_collection(db)
     _upsert_ridunt_vocabularies(db)
+    _upsert_ridunt_document_types(db)
     _upsert_ridunt_metadata(db)
     _upsert_ridunt_ai_seed(db)
 
