@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Activity, ArrowLeft, ArrowRight, Filter, Shield } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -61,6 +62,23 @@ type AuditCollectionOut = {
 
 const LIMIT = 25;
 
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm backdrop-blur">
+      <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">{label}</div>
+      <div className="mt-2 text-xl font-semibold tracking-tight">{value}</div>
+    </div>
+  );
+}
+
+function Badge({ children }: { children: string }) {
+  return (
+    <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+      {children}
+    </span>
+  );
+}
+
 function fmt(ts: string): string {
   return new Date(ts).toLocaleString("es-AR");
 }
@@ -82,6 +100,9 @@ export default function AuditPage() {
   const [action, setAction] = useState("");
   const [entityId, setEntityId] = useState("");
   const [offset, setOffset] = useState(0);
+  const total = data?.total ?? 0;
+  const current = data?.items.length ?? 0;
+  const entityFilterActive = Boolean(entityId.trim());
 
   async function load(nextOffset: number) {
     setLoading(true);
@@ -112,25 +133,61 @@ export default function AuditPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Auditoría</h1>
-        <p className="text-sm text-muted-foreground">
-          Registro de todas las operaciones: login, subida/borrado de
-          documentos, extracción IA, cambios humanos, aprobaciones y depósitos.
-        </p>
-      </div>
+      <section className="overflow-hidden rounded-[2rem] border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/50 p-6 shadow-[0_24px_90px_-60px_rgba(15,23,42,0.45)]">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-3">
+            <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-primary">
+              <Shield className="size-3.5" />
+              Auditoría
+            </span>
+            <div className="space-y-2">
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Auditoría</h1>
+              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                Registro de todas las operaciones: login, subida/borrado de documentos, extracción IA, cambios humanos, aprobaciones y depósitos.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge>Eventos</Badge>
+              <Badge>Filtros</Badge>
+              <Badge>Entidad</Badge>
+              <Badge>Detalle</Badge>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:min-w-[360px] lg:w-[420px]">
+            <div className="grid grid-cols-2 gap-3">
+              <MiniStat label="Registros" value={String(total || 0)} />
+              <MiniStat label="Página" value={String(current)} />
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Centro de control</p>
+                <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-300">
+                  {entityFilterActive ? "Filtrado" : "Completo"}
+                </span>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <MiniStat label="Offset" value={String(offset)} />
+                <MiniStat label="Límite" value={String(LIMIT)} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Filtros</CardTitle>
+      <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
+        <CardHeader className="border-b border-border/60 bg-muted/20">
+          <CardTitle className="flex items-center gap-2">
+            <Filter className="size-4" />
+            Filtros
+          </CardTitle>
           <CardDescription>
             Filtre por acción y por ID de documento/entidad. Solo visible para
             administradores.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-end gap-3 text-sm">
+        <CardContent className="flex flex-wrap items-end gap-3 p-6 text-sm">
           <label className="flex flex-col gap-1">
             Acción
             <select
@@ -162,9 +219,9 @@ export default function AuditPage() {
       </Card>
 
       {data && (
-        <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
+        <div className="overflow-hidden rounded-[1.75rem] border border-border/70 shadow-sm">
           <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
+            <thead className="bg-muted/50 text-left text-xs uppercase tracking-[0.16em] text-muted-foreground">
               <tr>
                 <th className="px-3 py-2">Fecha</th>
                 <th className="px-3 py-2">Usuario</th>
@@ -176,13 +233,20 @@ export default function AuditPage() {
             </thead>
             <tbody>
               {data.items.map((it) => (
-                <tr key={it.id} className="border-t align-top">
+                <tr key={it.id} className="border-t align-top transition-colors hover:bg-muted/30">
                   <td className="whitespace-nowrap px-3 py-2 text-xs">
                     {fmt(it.created_at)}
                   </td>
-                  <td className="px-3 py-2">{it.username ?? "sistema"}</td>
-                  <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">
-                    {it.action}
+                  <td className="px-3 py-2">
+                    <div className="flex flex-col gap-1">
+                      <span className="font-medium">{it.username ?? "sistema"}</span>
+                      <span className="text-xs text-muted-foreground">{it.user_id ? it.user_id.slice(0, 8) : "—"}</span>
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2">
+                    <span className="rounded-full bg-primary/10 px-2.5 py-1 font-mono text-xs text-primary">
+                      {it.action}
+                    </span>
                   </td>
                   <td className="px-3 py-2 font-mono text-xs">
                     {it.entity_type ? `${it.entity_type} ${(it.entity_id ?? "").slice(0, 8)}` : "—"}
@@ -224,7 +288,9 @@ export default function AuditPage() {
               size="sm"
               disabled={offset === 0}
               onClick={() => load(Math.max(0, offset - LIMIT))}
+              className="gap-2"
             >
+              <ArrowLeft className="size-4" />
               Anterior
             </Button>
             <Button
@@ -232,8 +298,10 @@ export default function AuditPage() {
               size="sm"
               disabled={offset + LIMIT >= data.total}
               onClick={() => load(offset + LIMIT)}
+              className="gap-2"
             >
               Siguiente
+              <ArrowRight className="size-4" />
             </Button>
           </div>
         </div>
