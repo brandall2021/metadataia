@@ -36,12 +36,21 @@ const inputCls =
 
 function MiniStat({ label, value, icon: Icon }: { label: string; value: string; icon: LucideIcon }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/75 px-4 py-3 shadow-sm">
+    <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm backdrop-blur">
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
         <Icon className="size-3.5" />
         {label}
       </div>
       <div className="mt-2 text-xl font-semibold tracking-tight">{value}</div>
+    </div>
+  );
+}
+
+function SignalPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-muted/25 px-3 py-2.5 shadow-sm">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
+      <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
     </div>
   );
 }
@@ -242,33 +251,55 @@ export default function AdminUsersPage() {
   const userCount = users.length;
   const activeCount = users.filter((user) => user.active).length;
   const roleCount = roles.length;
+  const permissionCount = permissions.length;
 
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/40 p-6 shadow-sm">
+      <section className="overflow-hidden rounded-[2rem] border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/50 p-6 shadow-[0_24px_90px_-60px_rgba(15,23,42,0.45)]">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-2">
             <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-primary">
               <Shield className="size-3.5" />
               RBAC
             </span>
-            <h1 className="text-3xl font-semibold tracking-tight">Usuarios y roles</h1>
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Usuarios y roles</h1>
             <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
               Administrá cuentas, roles y permisos sin tocar la base de datos a mano.
             </p>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Cuentas</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Roles</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Permisos</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Acceso</span>
+            </div>
           </div>
-          <div className="grid grid-cols-3 gap-3 sm:min-w-[360px] lg:w-[420px]">
-            <MiniStat label="Usuarios" value={String(userCount)} icon={Users} />
-            <MiniStat label="Activos" value={String(activeCount)} icon={UserPlus} />
-            <MiniStat label="Roles" value={String(roleCount)} icon={KeyRound} />
+          <div className="grid gap-3 sm:min-w-[360px] lg:w-[420px]">
+            <div className="grid grid-cols-2 gap-3">
+              <MiniStat label="Usuarios" value={String(userCount)} icon={Users} />
+              <MiniStat label="Activos" value={String(activeCount)} icon={UserPlus} />
+              <MiniStat label="Roles" value={String(roleCount)} icon={KeyRound} />
+              <MiniStat label="Permisos" value={String(permissionCount)} icon={Shield} />
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Centro de control</p>
+                <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-300">
+                  Activo
+                </span>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <SignalPill label="Usuarios" value={`${userCount} cargados`} />
+                <SignalPill label="Roles" value={`${roleCount} configurados`} />
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {error && <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_1.2fr]">
-        <Card className="border-border/70 shadow-sm">
+      <div className="grid gap-6 xl:grid-cols-[0.98fr_1.02fr]">
+        <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
           <CardHeader className="border-b border-border/60 bg-muted/20">
             <CardTitle className="flex items-center gap-2 text-lg">
               <UserPlus className="size-4" />
@@ -276,7 +307,7 @@ export default function AdminUsersPage() {
             </CardTitle>
             <CardDescription>Usuarios del sistema y sus roles de acceso.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 p-4">
+          <CardContent className="space-y-4 p-6">
             <form onSubmit={saveUser} className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="space-y-1 text-sm">
@@ -370,7 +401,7 @@ export default function AdminUsersPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/70 shadow-sm">
+        <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
           <CardHeader className="border-b border-border/60 bg-muted/20">
             <CardTitle className="flex items-center gap-2 text-lg">
               <PencilLine className="size-4" />
@@ -381,13 +412,19 @@ export default function AdminUsersPage() {
           <CardContent className="p-0">
             <div className="divide-y divide-border/60">
               {users.map((user) => (
-                <div key={user.id} className="grid gap-4 p-4 xl:grid-cols-[1.2fr_0.8fr_auto] xl:items-start">
-                  <div>
-                    <p className="font-medium">{user.username}</p>
+                <div key={user.id} className="grid gap-4 p-4 xl:grid-cols-[1.15fr_0.95fr_auto] xl:items-start">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium tracking-tight">{user.username}</p>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${user.active ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300" : "bg-muted text-muted-foreground"}`}>
+                        {user.active ? "Activo" : "Inactivo"}
+                      </span>
+                    </div>
                     <p className="text-sm text-muted-foreground">{user.email}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {user.first_name || user.last_name ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() : "Sin nombre"}
                     </p>
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Actualizado {formatDate(user.updated_at)}</p>
                   </div>
                   <div className="space-y-2 text-sm">
                     <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Roles</p>
@@ -396,11 +433,8 @@ export default function AdminUsersPage() {
                         <span key={role} className="rounded-full bg-muted px-2.5 py-1 text-xs">{role}</span>
                       )) : <span className="text-muted-foreground">Sin roles</span>}
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {user.active ? "Activo" : "Inactivo"} · {formatDate(user.updated_at)}
-                    </p>
                   </div>
-                  <div className="flex gap-2 xl:flex-col">
+                  <div className="flex gap-2 xl:flex-col xl:items-end">
                     <Button variant="outline" size="sm" className="gap-2" onClick={() => startEdit(user)}>
                       <PencilLine className="size-4" />
                       Editar
@@ -418,7 +452,7 @@ export default function AdminUsersPage() {
         </Card>
       </div>
 
-      <Card className="border-border/70 shadow-sm">
+      <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
         <CardHeader className="border-b border-border/60 bg-muted/20">
           <CardTitle className="flex items-center gap-2 text-lg">
             <KeyRound className="size-4" />
@@ -426,33 +460,38 @@ export default function AdminUsersPage() {
           </CardTitle>
           <CardDescription>Editar descripción y permisos efectivos de cada rol.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4 p-4">
+        <CardContent className="space-y-4 p-6">
           <div className="grid gap-4 xl:grid-cols-3">
             {roles.map((role) => {
               const draft = roleDrafts[role.id] ?? { description: role.description ?? "", permission_codes: [...role.permissions] };
               return (
-                <div key={role.id} className="rounded-2xl border border-border/60 bg-background p-4">
+                <div key={role.id} className="rounded-[1.75rem] border border-border/60 bg-background p-4 shadow-sm">
                   <div className="space-y-3">
-                    <div>
-                      <p className="font-medium">{role.name}</p>
-                      <p className="text-xs text-muted-foreground">{role.permissions.length} permisos</p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium tracking-tight">{role.name}</p>
+                        <p className="text-xs text-muted-foreground">{role.permissions.length} permisos</p>
+                      </div>
+                      <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">
+                        {draft.permission_codes.length} activos
+                      </span>
                     </div>
                     <label className="block space-y-1 text-sm">
-                      <span>Descripción</span>
-                    <textarea
-                      className={`${inputCls} min-h-20 resize-y`}
-                      value={draft.description}
-                      onChange={(e) =>
-                        setRoleDrafts((prev) => ({
-                          ...prev,
-                          [role.id]: { ...(prev[role.id] ?? draft), description: e.target.value },
-                        }))
-                      }
-                    />
+                      <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Descripción</span>
+                      <textarea
+                        className={`${inputCls} min-h-20 resize-y`}
+                        value={draft.description}
+                        onChange={(e) =>
+                          setRoleDrafts((prev) => ({
+                            ...prev,
+                            [role.id]: { ...(prev[role.id] ?? draft), description: e.target.value },
+                          }))
+                        }
+                      />
                     </label>
                     <div className="space-y-2">
                       <p className="text-sm font-medium">Permisos</p>
-                      <div className="max-h-64 space-y-2 overflow-auto rounded-2xl border border-border/50 bg-muted/10 p-3">
+                      <div className="max-h-72 space-y-2 overflow-auto rounded-2xl border border-border/50 bg-muted/10 p-3">
                         {permissions.map((permission) => {
                           const checked = draft.permission_codes.includes(permission.code);
                           return (
