@@ -97,8 +97,6 @@ services:
       AUTO_OCR: ${AUTO_OCR:-true}
       AUTO_AI: ${AUTO_AI:-true}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-30}
-    ports:
-      - "${API_PORT:-8001}:8000"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -147,8 +145,6 @@ services:
       # Rewrite /api -> backend dentro de la red del stack (Dokploy: misma
       # URL publica para frontend y API, sin CORS ni subdominios extra).
       API_INTERNAL_URL: http://api:8000
-    ports:
-      - "${FRONTEND_PORT:-3001}:3000"
     depends_on:
       - api
 
