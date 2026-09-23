@@ -34,6 +34,10 @@ admin_models = require_permission("admin.ai.models.manage")
 admin_agents = require_permission("admin.ai.agents.manage")
 
 
+def _as_uuid(value: str | uuid.UUID) -> uuid.UUID:
+    return value if isinstance(value, uuid.UUID) else uuid.UUID(str(value))
+
+
 def _provider_out(provider: AIProvider) -> ProviderOut:
     decrypted = decrypt_secret(provider.api_key_encrypted)
     return ProviderOut(
@@ -50,8 +54,8 @@ def _provider_out(provider: AIProvider) -> ProviderOut:
     )
 
 
-def _get_provider(db: Session, provider_id: str) -> AIProvider:
-    provider = db.get(AIProvider, uuid.UUID(provider_id))
+def _get_provider(db: Session, provider_id: str | uuid.UUID) -> AIProvider:
+    provider = db.get(AIProvider, _as_uuid(provider_id))
     if provider is None:
         raise HTTPException(status_code=404, detail="Proveedor no encontrado")
     return provider
@@ -74,8 +78,8 @@ def _model_out(model: AIModel) -> ModelOut:
     )
 
 
-def _get_model(db: Session, model_id: str) -> AIModel:
-    model = db.get(AIModel, uuid.UUID(model_id))
+def _get_model(db: Session, model_id: str | uuid.UUID) -> AIModel:
+    model = db.get(AIModel, _as_uuid(model_id))
     if model is None:
         raise HTTPException(status_code=404, detail="Modelo no encontrado")
     return model
@@ -293,8 +297,8 @@ def test_model_call(
 # --- Agentes ----------------------------------------------------------------
 
 
-def _get_agent(db: Session, agent_id: str) -> AIAgent:
-    agent = db.get(AIAgent, uuid.UUID(agent_id))
+def _get_agent(db: Session, agent_id: str | uuid.UUID) -> AIAgent:
+    agent = db.get(AIAgent, _as_uuid(agent_id))
     if agent is None:
         raise HTTPException(status_code=404, detail="Agente no encontrado")
     return agent

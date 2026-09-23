@@ -84,12 +84,21 @@ function StatusBadge({ active, onClick }: { active: boolean; onClick: () => void
 
 function MiniStat({ label, value, icon: Icon }: { label: string; value: string; icon: LucideIcon }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/75 px-4 py-3 shadow-sm">
+    <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm backdrop-blur">
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
         <Icon className="size-3.5" />
         {label}
       </div>
       <div className="mt-2 text-xl font-semibold tracking-tight">{value}</div>
+    </div>
+  );
+}
+
+function SignalPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-muted/25 px-3 py-2.5 shadow-sm">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
+      <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
     </div>
   );
 }
@@ -232,6 +241,8 @@ export default function AIPage() {
 
   const activeModels = models.filter((model) => model.active).length;
   const activeAgents = agents.filter((agent) => agent.active).length;
+  const selectedModel = selectedModelId ? models.find((model) => model.id === selectedModelId) ?? null : null;
+  const selectedAgent = selectedAgentId ? agents.find((agent) => agent.id === selectedAgentId) ?? null : null;
 
   async function load() {
     try {
@@ -637,26 +648,49 @@ export default function AIPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/40 p-6 shadow-sm">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl space-y-3">
+      <section className="overflow-hidden rounded-[2rem] border border-border/70 bg-gradient-to-br from-primary/[0.09] via-background to-muted/50 p-6 shadow-[0_24px_90px_-60px_rgba(15,23,42,0.45)]">
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl space-y-4">
             <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-primary">
               <Sparkles className="size-3.5" />
               Administración IA
             </span>
-            <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-tight">Agentes IA</h1>
+            <div className="space-y-3">
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Agentes IA</h1>
               <p className="max-w-xl text-sm leading-6 text-muted-foreground">
                 Acá se gobiernan los modelos y agentes de extracción: qué modelo usa cada
                 agente, sobre qué tipo documental actúa y con qué prompts trabaja.
               </p>
             </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Proveedores</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Modelos</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Agentes</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Versiones</span>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:min-w-[360px] lg:w-[420px]">
-            <MiniStat label="Modelos" value={`${models.length}`} icon={Cpu} />
-            <MiniStat label="Activos" value={`${activeModels}`} icon={Database} />
-            <MiniStat label="Agentes" value={`${agents.length}`} icon={Layers3} />
-            <MiniStat label="Vivos" value={`${activeAgents}`} icon={Bot} />
+          <div className="grid gap-3 sm:min-w-[360px] lg:w-[420px]">
+            <div className="grid grid-cols-2 gap-3">
+              <MiniStat label="Modelos" value={`${models.length}`} icon={Cpu} />
+              <MiniStat label="Activos" value={`${activeModels}`} icon={Database} />
+              <MiniStat label="Agentes" value={`${agents.length}`} icon={Layers3} />
+              <MiniStat label="Vivos" value={`${activeAgents}`} icon={Bot} />
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Centro de control</p>
+                <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-300">
+                  Operativo
+                </span>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <SignalPill label="Proveedores" value={`${providers.length} cargados`} />
+                <SignalPill label="Tipos doc." value={`${docTypes.length} disponibles`} />
+              </div>
+              <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                Editá proveedor, modelo y agente sin salir de la misma vista. La selección activa se mantiene visible para que el contexto no se pierda.
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -667,7 +701,7 @@ export default function AIPage() {
         </p>
       )}
 
-      <Card className="border-border/70 shadow-sm">
+      <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
         <CardHeader className="space-y-2 border-b border-border/60 bg-muted/20">
           <CardTitle className="flex items-center gap-2 text-lg">
             <KeyRound className="size-4" />
@@ -832,7 +866,7 @@ export default function AIPage() {
       </Card>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(360px,0.96fr)_1.04fr]">
-        <Card className="h-fit border-border/70 shadow-sm">
+        <Card className="h-fit overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
           <CardHeader className="space-y-2">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Plus className="size-4" />
@@ -998,7 +1032,7 @@ export default function AIPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/70 shadow-sm">
+        <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
           <CardHeader className="space-y-2 border-b border-border/60 bg-muted/20">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Cpu className="size-4" />
@@ -1012,6 +1046,20 @@ export default function AIPage() {
             <div className="grid gap-6 xl:grid-cols-[minmax(360px,0.96fr)_1.04fr]">
               <div className="space-y-3">
                 <h3 className="text-sm font-medium">{selectedModelId ? "Editar modelo" : "Nuevo modelo"}</h3>
+                {selectedModel && (
+                  <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.2em] text-primary/80">Modelo activo</p>
+                        <p className="mt-1 font-medium text-foreground">{selectedModel.name}</p>
+                      </div>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${selectedModel.active ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300" : "bg-muted text-muted-foreground"}`}>
+                        {selectedModel.active ? "Activo" : "Inactivo"}
+                      </span>
+                    </div>
+                    <p className="mt-2 font-mono text-xs text-muted-foreground">{selectedModel.provider_name} · {selectedModel.model_identifier}</p>
+                  </div>
+                )}
                 <form onSubmit={handleSaveModel} className="flex flex-col gap-3 text-sm">
                   <label className="flex flex-col gap-1.5">
                     <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Proveedor</span>
@@ -1105,7 +1153,7 @@ export default function AIPage() {
         </Card>
       </div>
 
-      <Card className="overflow-hidden border-border/70 shadow-sm">
+      <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
         <CardHeader className="space-y-2 border-b border-border/60 bg-muted/20">
           <CardTitle className="text-lg">Agentes configurados</CardTitle>
           <CardDescription>
@@ -1113,6 +1161,7 @@ export default function AIPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-xs uppercase tracking-[0.16em] text-muted-foreground">
               <tr>
@@ -1207,10 +1256,11 @@ export default function AIPage() {
               )}
             </tbody>
           </table>
+          </div>
         </CardContent>
       </Card>
 
-      <Card className="border-border/70 shadow-sm">
+      <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
         <CardHeader className="space-y-2 border-b border-border/60 bg-muted/20">
           <CardTitle className="text-lg">Versiones del agente</CardTitle>
           <CardDescription>
@@ -1222,6 +1272,13 @@ export default function AIPage() {
             <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
               <div className="space-y-3">
                 <h3 className="text-sm font-medium">Nueva versión</h3>
+                {selectedAgent && (
+                  <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm">
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Agente seleccionado</p>
+                    <p className="mt-1 font-medium text-foreground">{selectedAgent.name}</p>
+                    <p className="mt-1 font-mono text-xs text-muted-foreground">{selectedAgent.code}</p>
+                  </div>
+                )}
                 <div className="space-y-3 rounded-2xl border border-border/60 bg-background p-4">
                   <label className="flex flex-col gap-1.5 text-sm">
                     <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Modelo</span>

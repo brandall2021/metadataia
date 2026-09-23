@@ -47,21 +47,25 @@ def _make_provider_and_model(db) -> tuple[AIProvider, AIModel]:
     return provider, model
 
 
+def _uuid(value):
+    return value if isinstance(value, uuid.UUID) else uuid.UUID(str(value))
+
+
 def _cleanup(agent_id=None, model_id=None, provider_id=None) -> None:
     db = SessionLocal()
     try:
         if agent_id:
-            agent = db.get(AIAgent, agent_id)
+            agent = db.get(AIAgent, _uuid(agent_id))
             if agent:
                 db.delete(agent)
                 db.commit()
         if model_id:
-            model = db.get(AIModel, model_id)
+            model = db.get(AIModel, _uuid(model_id))
             if model:
                 db.delete(model)
                 db.commit()
         if provider_id:
-            provider = db.get(AIProvider, provider_id)
+            provider = db.get(AIProvider, _uuid(provider_id))
             if provider:
                 db.delete(provider)
                 db.commit()
@@ -336,8 +340,9 @@ def test_eliminar_agente_borra_versiones(client, admin_headers):
         agent_id = client.post("/api/admin/ai/agents", json=_agent_payload(model.id), headers=admin_headers).json()["id"]
         r = client.delete(f"/api/admin/ai/agents/{agent_id}", headers=admin_headers)
         assert r.status_code == 204
-        assert db.get(AIAgent, agent_id) is None
-        remaining = db.query(AIAgentVersion).filter(AIAgentVersion.agent_id == agent_id).count()
+        agent_uuid = _uuid(agent_id)
+        assert db.get(AIAgent, agent_uuid) is None
+        remaining = db.query(AIAgentVersion).filter(AIAgentVersion.agent_id == agent_uuid).count()
         assert remaining == 0
         _cleanup(model_id=model.id, provider_id=provider.id)
     finally:
