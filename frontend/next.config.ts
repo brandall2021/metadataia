@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // Los uploads de PDF pasan por el proxy de Next antes de llegar al backend.
+    // El límite por defecto de 10MB corta archivos más grandes y deja el frontend
+    // con socket hang up. Lo alineamos con el máximo del backend.
+    proxyClientMaxBodySize: "100mb",
+  },
   // FASE 18: en produccion Dokploy expone una unica URL (frontend:3000).
   // Este rewrite enruta /api del mismo origen hacia el backend interno
   // (api:8000), evitando CORS y dominios adicionales. Se evalua en el
