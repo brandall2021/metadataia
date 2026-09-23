@@ -173,7 +173,7 @@ const inputCls =
 
 function Stat({ label, value, icon: Icon }: { label: string; value: string; icon: LucideIcon }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/75 px-4 py-3 shadow-sm">
+    <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm backdrop-blur">
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
         <Icon className="size-3.5" />
         {label}
@@ -394,10 +394,12 @@ export default function ReviewPage() {
 
   const totalRecords = review?.metadata.records.length ?? 0;
   const validatedRecords = review?.metadata.records.filter((r) => r.validated).length ?? 0;
+  const selectedStatusMeta = selectedDoc ? documentHelpers.documentStatusMeta(selectedDoc.status) : null;
+  const reviewProgress = totalRecords > 0 ? Math.round((validatedRecords / totalRecords) * 100) : 0;
 
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/40 p-6 shadow-sm">
+      <section className="overflow-hidden rounded-[2rem] border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/50 p-6 shadow-[0_24px_90px_-60px_rgba(15,23,42,0.45)]">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl space-y-3">
             <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-primary">
@@ -477,24 +479,48 @@ export default function ReviewPage() {
           >
             {selectedDoc && review && meta ? (
               <div className="space-y-6 p-4">
+                <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone={selectedStatusMeta?.tone ?? meta.tone}>{selectedStatusMeta?.label ?? meta.label}</Badge>
+                        {review.docType && <Badge tone="slate">{review.docType.code}</Badge>}
+                      </div>
+                      <p className="max-w-2xl text-sm text-muted-foreground">{meta.description}</p>
+                    </div>
+                    <div className="grid min-w-[280px] gap-3 sm:grid-cols-3">
+                      <div className="rounded-2xl bg-muted/30 px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Progreso</p>
+                        <p className="mt-1 text-sm font-medium">{reviewProgress}%</p>
+                      </div>
+                      <div className="rounded-2xl bg-muted/30 px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Validos</p>
+                        <p className="mt-1 text-sm font-medium">{validatedRecords}/{totalRecords}</p>
+                      </div>
+                      <div className="rounded-2xl bg-muted/30 px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Pendientes</p>
+                        <p className="mt-1 text-sm font-medium">{missingFields.length}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted/60">
+                    <div className="h-full rounded-full bg-gradient-to-r from-primary via-primary/70 to-emerald-500" style={{ width: `${reviewProgress}%` }} />
+                  </div>
+                </div>
+
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone={meta.tone}>{meta.label}</Badge>
-                      {review.docType && <Badge tone="slate">{review.docType.code}</Badge>}
-                    </div>
-                    <p className="max-w-2xl text-sm text-muted-foreground">{meta.description}</p>
                     <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                       <div className="rounded-2xl bg-muted/30 px-3 py-2">
-                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Documento</p>
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Documento</p>
                         <p className="mt-1 text-sm font-medium">{selectedDoc.original_filename ?? "—"}</p>
                       </div>
                       <div className="rounded-2xl bg-muted/30 px-3 py-2">
-                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Estado</p>
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Estado</p>
                         <p className="mt-1 text-sm font-medium">{selectedDoc.status}</p>
                       </div>
                       <div className="rounded-2xl bg-muted/30 px-3 py-2">
-                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Confianza media</p>
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Confianza media</p>
                         <p className="mt-1 text-sm font-medium">
                           {totalRecords > 0
                             ? `${Math.round(((review.metadata.records.reduce((sum, r) => sum + (r.confidence ?? 0), 0) / totalRecords) || 0) * 100)}%`
@@ -525,7 +551,7 @@ export default function ReviewPage() {
                 </div>
 
                 <div className="grid gap-4 xl:grid-cols-[minmax(280px,0.9fr)_1.1fr]">
-                  <div className="rounded-2xl border border-border/70 bg-muted/10 p-4">
+                  <div className="rounded-2xl border border-border/70 bg-muted/10 p-4 shadow-sm">
                     <div className="flex items-center justify-between gap-2">
                       <div>
                         <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">PDF</p>
@@ -545,11 +571,11 @@ export default function ReviewPage() {
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-3">
-                  <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Evidencia</p>
-                    <ul className="mt-3 space-y-2 text-sm">
-                      {review.metadata.records.slice(0, 4).map((record) => (
-                        <li key={record.id} className="rounded-2xl border border-border/60 bg-background p-3">
+                    <div className="rounded-2xl border border-border/70 bg-muted/20 p-4 shadow-sm">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Evidencia</p>
+                      <ul className="mt-3 space-y-2 text-sm">
+                        {review.metadata.records.slice(0, 4).map((record) => (
+                          <li key={record.id} className="rounded-2xl border border-border/60 bg-background p-3">
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-medium">{record.display_name}</span>
                             <Badge tone={record.validated ? "green" : record.normalized ? "emerald" : "slate"}>
@@ -568,11 +594,11 @@ export default function ReviewPage() {
                     </ul>
                   </div>
 
-                  <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Validación</p>
-                    <ul className="mt-3 space-y-2 text-sm">
-                      {review.validation.results.slice(0, 4).map((result) => (
-                        <li key={result.id} className="flex items-center justify-between gap-2 rounded-2xl border border-border/60 bg-background px-3 py-2">
+                    <div className="rounded-2xl border border-border/70 bg-muted/20 p-4 shadow-sm">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Validación</p>
+                      <ul className="mt-3 space-y-2 text-sm">
+                        {review.validation.results.slice(0, 4).map((result) => (
+                          <li key={result.id} className="flex items-center justify-between gap-2 rounded-2xl border border-border/60 bg-background px-3 py-2">
                           <span>{result.validator_type}</span>
                           <Badge tone={formatStatusTone(result.status)}>{result.status}</Badge>
                         </li>
@@ -581,11 +607,11 @@ export default function ReviewPage() {
                     </ul>
                   </div>
 
-                  <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Depósito</p>
-                    <ul className="mt-3 space-y-2 text-sm">
-                      {review.depositions.slice(0, 4).map((deposition) => (
-                        <li key={deposition.id} className="flex items-center justify-between gap-2 rounded-2xl border border-border/60 bg-background px-3 py-2">
+                    <div className="rounded-2xl border border-border/70 bg-muted/20 p-4 shadow-sm">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Depósito</p>
+                      <ul className="mt-3 space-y-2 text-sm">
+                        {review.depositions.slice(0, 4).map((deposition) => (
+                          <li key={deposition.id} className="flex items-center justify-between gap-2 rounded-2xl border border-border/60 bg-background px-3 py-2">
                           <span>{deposition.handle ?? deposition.external_item_id ?? "Depósito"}</span>
                           <Badge tone={formatStatusTone(deposition.status)}>{deposition.status}</Badge>
                         </li>
@@ -596,7 +622,7 @@ export default function ReviewPage() {
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-2xl border border-border/70 bg-muted/10 p-4">
+                  <div className="rounded-2xl border border-border/70 bg-muted/10 p-4 shadow-sm">
                     <div className="flex items-center justify-between gap-2">
                       <div>
                         <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Formulario dinámico</p>
@@ -658,7 +684,7 @@ export default function ReviewPage() {
                     </form>
                   </div>
 
-                  <div className="rounded-2xl border border-border/70 bg-muted/10 p-4">
+                  <div className="rounded-2xl border border-border/70 bg-muted/10 p-4 shadow-sm">
                     <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Campos existentes</p>
                     <div className="mt-4 space-y-3">
                       {review.metadata.records.map((record) => (
