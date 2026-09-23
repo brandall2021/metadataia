@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -25,8 +25,8 @@ export default function AdminHome() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href="/admin/metadata">
-              <Button variant="outline">Ir a Metadatos</Button>
+            <Link href="/admin/metadata" className={buttonVariants({ variant: "outline" })}>
+              Ir a Metadatos
             </Link>
           </CardContent>
         </Card>
@@ -39,8 +39,8 @@ export default function AdminHome() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href="/admin/audit">
-              <Button variant="outline">Ir a Auditoría</Button>
+            <Link href="/admin/audit" className={buttonVariants({ variant: "outline" })}>
+              Ir a Auditoría
             </Link>
           </CardContent>
         </Card>
@@ -53,8 +53,8 @@ export default function AdminHome() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href="/admin/dashboard">
-              <Button variant="outline">Ver Dashboard</Button>
+            <Link href="/admin/dashboard" className={buttonVariants({ variant: "outline" })}>
+              Ver Dashboard
             </Link>
           </CardContent>
         </Card>
@@ -67,8 +67,8 @@ export default function AdminHome() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href="/admin/ai">
-              <Button variant="outline">Ir a Agentes IA</Button>
+            <Link href="/admin/ai" className={buttonVariants({ variant: "outline" })}>
+              Ir a Agentes IA
             </Link>
           </CardContent>
         </Card>
@@ -81,8 +81,8 @@ export default function AdminHome() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href="/admin/repositories">
-              <Button variant="outline">Ir a Repositorios</Button>
+            <Link href="/admin/repositories" className={buttonVariants({ variant: "outline" })}>
+              Ir a Repositorios
             </Link>
           </CardContent>
         </Card>

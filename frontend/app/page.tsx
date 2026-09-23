@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -42,16 +42,16 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               {item.title === "Administración" ? (
-                <a href="/admin">
-                  <Button variant="outline">Abrir</Button>
-                </a>
+                <Link href="/admin" className={buttonVariants({ variant: "outline" })}>
+                  Abrir
+                </Link>
               ) : item.title === "Revisión" ? (
-                <Link href="/review">
-                  <Button variant="outline">Abrir</Button>
+                <Link href="/review" className={buttonVariants({ variant: "outline" })}>
+                  Abrir
                 </Link>
               ) : item.title === "Documentos" ? (
-                <Link href="/documents">
-                  <Button variant="outline">Abrir</Button>
+                <Link href="/documents" className={buttonVariants({ variant: "outline" })}>
+                  Abrir
                 </Link>
               ) : (
                 <Button variant="outline" disabled>
