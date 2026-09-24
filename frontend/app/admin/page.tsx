@@ -386,30 +386,31 @@ export default function AdminHome() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-[0_20px_50px_-34px_rgba(15,23,42,0.36)]">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+      <section className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur xl:p-5">
+        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr] xl:items-center">
           <div className="max-w-2xl space-y-3">
-            <span className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-[#4F46E5]">
+            <span className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#4F46E5]">
               <Gauge className="size-3.5" />
               Administración
             </span>
             <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Administración</h1>
+              <p className="text-xs text-slate-500">Inicio / Administración</p>
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-950 xl:text-[2.1rem]">Administración</h1>
               <p className="max-w-xl text-sm leading-6 text-slate-500">
                 Gestioná metadatos, agentes, repositorios y configuraciones del sistema.
               </p>
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[400px] xl:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Base activa</p>
-              <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">{fmt(dashboard?.documentos.total ?? 0)}</p>
-              <p className="mt-1 text-sm text-slate-500">Documentos en el sistema</p>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 shadow-sm">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Base activa</p>
+              <p className="mt-1 text-xl font-semibold tracking-tight text-slate-950">{fmt(dashboard?.documentos.total ?? 0)}</p>
+              <p className="mt-1 text-xs text-slate-500">Documentos en el sistema</p>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Estado actual</p>
-              <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">{fmt(dashboard?.depositos.completados ?? 0)}</p>
-              <p className="mt-1 text-sm text-slate-500">Depósitos completados</p>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 shadow-sm">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Estado actual</p>
+              <p className="mt-1 text-xl font-semibold tracking-tight text-slate-950">{fmt(dashboard?.depositos.completados ?? 0)}</p>
+              <p className="mt-1 text-xs text-slate-500">Depósitos completados</p>
             </div>
           </div>
         </div>
@@ -424,7 +425,7 @@ export default function AdminHome() {
         </div>
       )}
 
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {loading.dashboard || loading.agents || loading.repos || loading.schemas || loading.audit ? (
           <>
             <SkeletonCard />
@@ -470,9 +471,9 @@ export default function AdminHome() {
         )}
       </section>
 
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.85fr)]">
+      <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.82fr)]">
         <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             {MODULES.map((module) => (
               <ModuleCard
                 key={module.href}
@@ -500,13 +501,13 @@ export default function AdminHome() {
           </div>
         </div>
 
-        <aside className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-[0_14px_30px_-24px_rgba(15,23,42,0.32)]">
+        <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Actividad reciente</p>
-              <h2 className="mt-2 text-lg font-semibold tracking-tight text-slate-950">Movimientos del sistema</h2>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Actividad reciente</p>
+              <h2 className="mt-2 text-base font-semibold tracking-tight text-slate-950">Movimientos del sistema</h2>
             </div>
-            <div className="flex size-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
+            <div className="flex size-9 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
               <Clock3 className="size-4" />
             </div>
           </div>
@@ -531,7 +532,7 @@ export default function AdminHome() {
             )}
           </div>
 
-          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
             <p className="font-medium text-slate-900">Estado del sistema</p>
             <p className="mt-1 leading-6">
               {dashboard?.procesamiento.errores ?? 0} errores de procesamiento, {dashboard?.ia.errores ?? 0} errores de IA y {dashboard?.depositos.fallidos ?? 0} depósitos fallidos.

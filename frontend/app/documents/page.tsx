@@ -448,25 +448,38 @@ export default function DocumentsPage() {
 
   return (
     <div className="space-y-6 pb-4">
-      <section className="rounded-3xl border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/40 p-6 shadow-sm">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+      <section className="rounded-2xl border border-border/70 bg-background/90 p-4 shadow-sm backdrop-blur xl:p-5">
+        <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr] xl:items-center">
           <div className="max-w-2xl space-y-3">
-            <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-primary">
+            <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-primary">
               <Layers3 className="size-3.5" />
               Workspace de documentos
             </span>
             <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-tight text-pretty">Documentos</h1>
+              <p className="text-xs text-muted-foreground">Inicio / Documentos</p>
+              <h1 className="text-2xl font-semibold tracking-tight xl:text-[2.1rem]">Documentos</h1>
               <p className="max-w-2xl text-sm leading-6 text-muted-foreground text-balance">
                 Carga, análisis, OCR, extracción y depósito en un solo lugar. Seleccioná un PDF y seguí el flujo completo sin salir de esta pantalla.
               </p>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:min-w-[360px] lg:w-[420px]">
-            <StatCard label="Documentos" value={`${documents.length}`} hint="En el repositorio" icon={Database} />
-            <StatCard label="Activos" value={`${activeDocs}`} hint="En procesamiento" icon={Loader2} />
-            <StatCard label="Aprobados" value={`${approvedDocs}`} hint="Listos para depositar" icon={CheckCircle2} />
-            <StatCard label="Depositados" value={`${depositedDocs}`} hint="Cerrados" icon={Clock3} />
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-border/70 bg-slate-50 p-3 shadow-sm">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Documentos</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{documents.length}</p>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-indigo-50 p-3 shadow-sm">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Activos</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-indigo-700">{activeDocs}</p>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-emerald-50 p-3 shadow-sm">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Aprobados</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-700">{approvedDocs}</p>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-sky-50 p-3 shadow-sm">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Depositados</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-sky-700">{depositedDocs}</p>
+            </div>
           </div>
         </div>
       </section>

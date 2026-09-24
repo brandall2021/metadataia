@@ -591,26 +591,38 @@ export default function ReviewPage() {
 
   return (
     <div className="space-y-6 pb-28">
-      <section className="rounded-[1.5rem] border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/50 p-6 shadow-[0_24px_90px_-60px_rgba(15,23,42,0.45)]">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl space-y-3">
-            <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-primary">
+      <section className="rounded-2xl border border-border/70 bg-background/90 p-4 shadow-sm backdrop-blur xl:p-5">
+        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr] xl:items-center">
+          <div className="space-y-3">
+            <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-primary">
               <Edit3 className="size-3.5" />
               Revisión humana
             </span>
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Inicio / Revisión humana</p>
-              <h1 className="text-3xl font-semibold tracking-tight">Revisión</h1>
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Inicio / Revisión humana</p>
+              <h1 className="text-2xl font-semibold tracking-tight xl:text-[2.1rem]">Revisión</h1>
               <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
                 Validá los campos extraídos, corregí valores y aprobá documentos.
               </p>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:min-w-[360px] xl:w-[560px] xl:grid-cols-4">
-            <Stat label="Pendientes" value={`${pendingDocs}`} icon={FileText} />
-            <Stat label="Registros" value={`${totalRecords}`} icon={History} />
-            <Stat label="Validados" value={`${validatedRecords}`} icon={CheckCircle2} />
-            <Stat label="Campos faltantes" value={`${missingFields.length}`} icon={Plus} />
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-border/70 bg-slate-50 p-3 shadow-sm">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Pendientes</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{pendingDocs}</p>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-indigo-50 p-3 shadow-sm">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Registros</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-indigo-700">{totalRecords}</p>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-emerald-50 p-3 shadow-sm">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Validados</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-700">{validatedRecords}</p>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-amber-50 p-3 shadow-sm">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Campos faltantes</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-amber-700">{missingFields.length}</p>
+            </div>
           </div>
         </div>
       </section>
@@ -618,10 +630,10 @@ export default function ReviewPage() {
       {error && <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
 
       {selectedDoc && review && (
-        <div className="sticky top-4 z-10 hidden rounded-2xl border border-border/70 bg-background/95 p-3 shadow-sm backdrop-blur lg:block">
+        <div className="sticky top-4 z-10 hidden rounded-2xl border border-border/70 bg-background/95 p-2.5 shadow-sm backdrop-blur lg:block">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="min-w-0 space-y-1">
-              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Documento seleccionado</p>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Documento seleccionado</p>
               <p className="truncate text-sm font-medium">{selectedDoc.original_filename ?? selectedDoc.sha256 ?? selectedDoc.id}</p>
               <p className="text-xs text-muted-foreground">{meta?.label ?? selectedDoc.status} · Progreso {reviewProgress}% · Página {currentPage} de {pdfPageCount || currentPage}</p>
             </div>
