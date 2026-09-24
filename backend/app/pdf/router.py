@@ -113,7 +113,6 @@ def _doc_detail_out(doc: Document) -> DocumentDetailOut:
     ]
     return DocumentDetailOut(
         **_doc_out(doc).model_dump(),
-        document_type_id=doc.document_type_id,
         pages=[_page_out(p) for p in sorted(doc.pages, key=lambda p: p.page_number)],
         analysis={
             "total_text_length": total_text,
