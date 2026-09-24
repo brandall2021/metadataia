@@ -16,6 +16,7 @@ import {
   Sparkles,
   UploadCloud,
   Wrench,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -402,6 +403,23 @@ export default function DocumentsPage() {
     }
   }
 
+  async function deleteDocument() {
+    if (!selectedDoc) return;
+    if (!window.confirm("¿Borrar este documento? Esta acción no se puede deshacer.")) return;
+    setError(null);
+    try {
+      await apiFetch(`/api/documents/${selectedDoc.id}`, { method: "DELETE" });
+      setView(null);
+      setSelectedId((current) => {
+        const nextDocuments = documents.filter((doc) => doc.id !== selectedDoc.id);
+        return current === selectedDoc.id ? nextDocuments[0]?.id ?? null : current;
+      });
+      await loadDocuments();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo borrar el documento");
+    }
+  }
+
   const canRequestOcr = documentHelpers.documentCanRequestOcr(selectedDoc);
   const canRequestExtraction = documentHelpers.documentCanRequestExtraction(selectedDoc);
   const canRequestNormalization = documentHelpers.documentCanRequestNormalization(view?.metadata);
@@ -601,6 +619,10 @@ export default function DocumentsPage() {
                   <Button variant="outline" size="sm" className="gap-2" onClick={() => void downloadDocument()}>
                     <Download className="size-4" />
                     Descargar
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-2 border-red-200 text-red-700 hover:bg-red-50" onClick={() => void deleteDocument()}>
+                    <Trash2 className="size-4" />
+                    Borrar
                   </Button>
                 </div>
               ) : null

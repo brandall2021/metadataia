@@ -89,6 +89,22 @@ type LoadingState = {
 
 const MODULES = [
   {
+    href: "/documents",
+    title: "Documentos",
+    icon: FileSliders,
+    description: "Entrá al flujo operativo para cargar, analizar y borrar PDFs.",
+    cta: "Abrir documentos",
+    tone: "emerald",
+  },
+  {
+    href: "/review",
+    title: "Revisión",
+    icon: CheckCircle2,
+    description: "Validá, editá y aprobá los metadatos extraídos por IA.",
+    cta: "Abrir revisión",
+    tone: "sky",
+  },
+  {
     href: "/admin/metadata",
     title: "Metadatos",
     icon: Database,
