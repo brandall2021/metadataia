@@ -21,6 +21,7 @@ class DocumentOut(BaseModel):
     file_size: int | None
     sha256: str | None
     page_count: int | None
+    document_type_id: uuid.UUID | None
     needs_ocr: bool
     status: str
     created_at: datetime

@@ -181,6 +181,64 @@ def create_record(
     return _record_out(rec)
 
 
+@router.post("/{document_id}/records/{record_id}/validate", response_model=dict, status_code=status.HTTP_200_OK)
+def validate_record(
+    document_id: UUID,
+    record_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(can_review),
+):
+    doc = _get_doc(db, document_id)
+    rec = _get_record(db, document_id, record_id)
+    _ensure_editable(doc)
+    old = {"field": field_key(rec.metadata_field.element, rec.metadata_field.qualifier), "validated": rec.validated}
+    rec.validated = True
+    rec.manually_modified = False
+    audit_log(
+        db,
+        user=user,
+        action="record.validate",
+        entity_type="document",
+        entity_id=str(doc.id),
+        old_value=old,
+        new_value={"field": field_key(rec.metadata_field.element, rec.metadata_field.qualifier), "validated": True},
+        **request_context(request),
+    )
+    db.commit()
+    db.refresh(rec)
+    return _record_out(rec)
+
+
+@router.post("/{document_id}/records/{record_id}/invalidate", response_model=dict, status_code=status.HTTP_200_OK)
+def invalidate_record(
+    document_id: UUID,
+    record_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(can_review),
+):
+    doc = _get_doc(db, document_id)
+    rec = _get_record(db, document_id, record_id)
+    _ensure_editable(doc)
+    old = {"field": field_key(rec.metadata_field.element, rec.metadata_field.qualifier), "validated": rec.validated}
+    rec.validated = False
+    rec.manually_modified = True
+    audit_log(
+        db,
+        user=user,
+        action="record.invalidate",
+        entity_type="document",
+        entity_id=str(doc.id),
+        old_value=old,
+        new_value={"field": field_key(rec.metadata_field.element, rec.metadata_field.qualifier), "validated": False},
+        **request_context(request),
+    )
+    db.commit()
+    db.refresh(rec)
+    return _record_out(rec)
+
+
 @router.delete("/{document_id}/records/{record_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_record(
     document_id: UUID,

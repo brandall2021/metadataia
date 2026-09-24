@@ -59,6 +59,7 @@ def _doc_out(doc: Document) -> DocumentOut:
         file_size=doc.file_size,
         sha256=doc.sha256,
         page_count=doc.page_count,
+        document_type_id=doc.document_type_id,
         needs_ocr=doc.needs_ocr,
         status=doc.status,
         created_at=doc.created_at,
