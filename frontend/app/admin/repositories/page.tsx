@@ -67,8 +67,8 @@ function StatusBadge({ active }: { active: boolean }) {
 
 function MiniStat({ label, value, icon: Icon }: { label: string; value: string; icon: LucideIcon }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm backdrop-blur">
-      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-slate-500">
         <Icon className="size-3.5" />
         {label}
       </div>
@@ -79,8 +79,8 @@ function MiniStat({ label, value, icon: Icon }: { label: string; value: string; 
 
 function SignalPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-muted/25 px-3 py-2.5 shadow-sm">
-      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 shadow-sm">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">{label}</div>
       <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
     </div>
   );
@@ -255,25 +255,25 @@ export default function RepositoriesPage() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[2rem] border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/50 p-6 shadow-[0_24px_90px_-60px_rgba(15,23,42,0.45)]">
+      <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-[0_20px_50px_-34px_rgba(15,23,42,0.36)]">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl space-y-3">
-            <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-primary">
+            <span className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-[#4F46E5]">
               <Globe2 className="size-3.5" />
               Administración de repositorios
             </span>
             <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Repositorios</h1>
-              <p className="max-w-xl text-sm leading-6 text-muted-foreground">
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Repositorios</h1>
+              <p className="max-w-xl text-sm leading-6 text-slate-500">
                 Configuración de DSpace, credenciales, sincronización de colecciones y vínculo con
                 tipos documentales.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Conexión</span>
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Sincronización</span>
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Colecciones</span>
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Tipos</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500 shadow-sm">Conexión</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500 shadow-sm">Sincronización</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500 shadow-sm">Colecciones</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500 shadow-sm">Tipos</span>
             </div>
           </div>
           <div className="grid gap-3 sm:min-w-[360px] lg:w-[420px]">
@@ -283,10 +283,10 @@ export default function RepositoriesPage() {
               <MiniStat label="Colecciones" value={`${loadedCollections}`} icon={Layers3} />
               <MiniStat label="Tipos" value={`${docTypes.length}`} icon={Globe2} />
             </div>
-            <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Centro de control</p>
-                <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-300">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Centro de control</p>
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
                   Operativo
                 </span>
               </div>
@@ -312,8 +312,8 @@ export default function RepositoriesPage() {
       )}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(360px,0.9fr)_1.1fr]">
-        <Card className="h-fit overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
-          <CardHeader className="space-y-2 border-b border-border/60 bg-muted/20">
+        <Card className="h-fit overflow-hidden rounded-[1.5rem] border-slate-200 shadow-[0_14px_30px_-24px_rgba(15,23,42,0.32)]">
+          <CardHeader className="space-y-2 border-b border-slate-200 bg-slate-50/80">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Plus className="size-4" />
               Nuevo repositorio
@@ -418,7 +418,7 @@ export default function RepositoriesPage() {
 
         <div className="space-y-4">
           {selectedRepo && (
-            <div className="rounded-[1.75rem] border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+            <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-4 shadow-sm">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Repositorio expandido</p>
@@ -444,11 +444,11 @@ export default function RepositoriesPage() {
             return (
               <div
                 key={repo.id}
-                className="overflow-hidden rounded-[1.75rem] border border-border/70 bg-background/80 shadow-sm transition-colors hover:border-primary/20"
+                className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-slate-50 shadow-sm transition-colors hover:border-indigo-200"
               >
                 <div className="flex items-start gap-3 p-4 lg:p-5">
                   <button
-                    className="flex flex-1 items-start gap-3 rounded-2xl p-2 text-left transition-colors hover:bg-muted/35"
+                    className="flex flex-1 items-start gap-3 rounded-2xl p-2 text-left transition-colors hover:bg-slate-100"
                     onClick={() => toggleExpand(repo.id)}
                   >
                     {open ? (
@@ -465,19 +465,19 @@ export default function RepositoriesPage() {
                         </span>
                       </div>
                       <div className="grid gap-2 text-xs text-muted-foreground md:grid-cols-3">
-                        <div className="rounded-xl bg-muted/35 px-3 py-2">
+                        <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-200">
                           <span className="block text-[10px] uppercase tracking-[0.18em]">URL pública</span>
                           <span className="mt-1 block truncate text-foreground">
                             {repo.base_url ?? "—"}
                           </span>
                         </div>
-                        <div className="rounded-xl bg-muted/35 px-3 py-2">
+                        <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-200">
                           <span className="block text-[10px] uppercase tracking-[0.18em]">API</span>
                           <span className="mt-1 block truncate text-foreground">
                             {repo.api_url ?? "—"}
                           </span>
                         </div>
-                        <div className="rounded-xl bg-muted/35 px-3 py-2">
+                        <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-200">
                           <span className="block text-[10px] uppercase tracking-[0.18em]">Usuario</span>
                           <span className="mt-1 block truncate text-foreground">
                             {repo.username ?? "—"}
@@ -527,7 +527,7 @@ export default function RepositoriesPage() {
                 </div>
 
                 {open && (
-                  <div className="border-t border-border/60 bg-muted/10">
+                    <div className="border-t border-slate-200 bg-slate-50/60">
                     <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm lg:px-5">
                       <div>
                         <p className="font-medium">Colecciones sincronizadas</p>
@@ -541,7 +541,7 @@ export default function RepositoriesPage() {
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
-                        <thead className="bg-muted/50 text-left text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                        <thead className="bg-slate-100 text-left text-xs uppercase tracking-[0.16em] text-slate-500">
                           <tr>
                             <th className="px-4 py-3 font-medium">Colección</th>
                             <th className="px-4 py-3 font-medium">Handle</th>
@@ -550,7 +550,7 @@ export default function RepositoriesPage() {
                         </thead>
                         <tbody>
                           {collections.map((c) => (
-                            <tr key={c.id} className="border-t transition-colors hover:bg-muted/30">
+                            <tr key={c.id} className="border-t transition-colors hover:bg-slate-100">
                               <td className="px-4 py-3">{c.name ?? c.external_id ?? "—"}</td>
                               <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                                 {c.handle ?? "—"}
@@ -588,7 +588,7 @@ export default function RepositoriesPage() {
             );
           })}
           {repos.length === 0 && (
-            <div className="rounded-[1.75rem] border border-border/70 bg-background/80 p-10 text-center shadow-sm backdrop-blur">
+            <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-10 text-center shadow-sm">
               <Database className="mx-auto mb-3 size-10 opacity-35" />
               <p className="text-sm text-muted-foreground">
                 Sin repositorios todavía. Cree el primero con el formulario.

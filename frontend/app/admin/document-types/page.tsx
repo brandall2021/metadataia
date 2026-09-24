@@ -62,8 +62,8 @@ const emptyForm = {
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm backdrop-blur">
-      <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">{label}</div>
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
+      <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">{label}</div>
       <div className="mt-2 text-xl font-semibold tracking-tight">{value}</div>
     </div>
   );
@@ -71,8 +71,8 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 
 function SignalPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-muted/25 px-3 py-2.5 shadow-sm">
-      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 shadow-sm">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">{label}</div>
       <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
     </div>
   );
@@ -231,22 +231,22 @@ export default function DocumentTypesPage() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[2rem] border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/50 p-6 shadow-[0_24px_90px_-60px_rgba(15,23,42,0.45)]">
+      <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-[0_20px_50px_-34px_rgba(15,23,42,0.36)]">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-2">
-            <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-primary">
+            <span className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-[#4F46E5]">
               <Layers3 className="size-3.5" />
               Tipos documentales
             </span>
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Tipos documentales</h1>
-            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Tipos documentales</h1>
+            <p className="max-w-2xl text-sm leading-6 text-slate-500">
               Armá perfiles documentales y asignales campos, agente IA y idiomas OCR desde una sola pantalla.
             </p>
             <div className="flex flex-wrap gap-2">
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Perfiles</span>
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Campos</span>
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Agente IA</span>
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">OCR</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500 shadow-sm">Perfiles</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500 shadow-sm">Campos</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500 shadow-sm">Agente IA</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500 shadow-sm">OCR</span>
             </div>
           </div>
           <div className="grid gap-3 sm:min-w-[360px] lg:w-[420px]">
@@ -254,10 +254,10 @@ export default function DocumentTypesPage() {
               <MiniStat label="Tipos" value={String(types.length)} />
               <MiniStat label="Campos" value={String(selectedFields)} />
             </div>
-            <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Centro de control</p>
-                <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-300">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Centro de control</p>
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
                   Activo
                 </span>
               </div>
@@ -270,11 +270,11 @@ export default function DocumentTypesPage() {
         </div>
       </section>
 
-      {error && <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+      {error && <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
 
       <div className="grid gap-6 xl:grid-cols-[0.98fr_1.02fr]">
-        <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
-          <CardHeader className="border-b border-border/60 bg-muted/20">
+        <Card className="overflow-hidden rounded-[1.5rem] border-slate-200 shadow-[0_14px_30px_-24px_rgba(15,23,42,0.32)]">
+          <CardHeader className="border-b border-slate-200 bg-slate-50/80">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Plus className="size-4" />
               {selectedType ? "Editar tipo" : "Nuevo tipo"}
@@ -337,7 +337,7 @@ export default function DocumentTypesPage() {
         </Card>
 
         <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
-          <CardHeader className="border-b border-border/60 bg-muted/20">
+          <CardHeader className="border-b border-slate-200 bg-slate-50/80">
             <CardTitle>Listado</CardTitle>
             <CardDescription>Elegí un tipo para editarlo y asignar sus campos.</CardDescription>
           </CardHeader>
@@ -348,7 +348,7 @@ export default function DocumentTypesPage() {
                   key={type.id}
                   type="button"
                   onClick={() => selectType(type)}
-                  className={`w-full rounded-2xl border p-4 text-left shadow-sm transition-colors ${selectedId === type.id ? "border-primary/35 bg-primary/5" : "border-border/70 bg-background/80 hover:border-primary/20 hover:bg-muted/20"}`}
+                  className={`w-full rounded-2xl border p-4 text-left shadow-sm transition-colors ${selectedId === type.id ? "border-indigo-300 bg-indigo-50/70" : "border-slate-200 bg-slate-50 hover:border-indigo-200 hover:bg-slate-100"}`}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 space-y-1">
@@ -370,7 +370,7 @@ export default function DocumentTypesPage() {
       </div>
 
       <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
-        <CardHeader className="border-b border-border/60 bg-muted/20">
+          <CardHeader className="border-b border-slate-200 bg-slate-50/80">
           <CardTitle className="flex items-center gap-2 text-lg">
             <ShieldCheck className="size-4" />
             Campos del tipo
@@ -380,7 +380,7 @@ export default function DocumentTypesPage() {
         <CardContent className="space-y-4 p-6">
           {selectedType ? (
             <>
-              <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Cobertura</p>

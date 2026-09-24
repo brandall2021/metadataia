@@ -93,15 +93,21 @@ class FixedConnector:
 class RecordingClient:
     """Cliente HTTP registrador para probar las llamadas REST del conector."""
 
-    def __init__(self):
+    def __init__(self, csrf_on_login: bool = False):
         self.requests = []
         self.login_token = "tok-abc-123"
+        self.csrf_on_login = csrf_on_login
+        self.csrf_token = "csrf-123"
 
     def request(self, method, url, **kwargs):
         self.requests.append((method, url, kwargs))
         path = url.split("/api/")[-1].split("?")[0]
+        if method == "GET" and path == "security/csrf":
+            return httpx.Response(204, headers={"DSPACE-XSRF-TOKEN": self.csrf_token})
         if method == "POST" and path == "authn/login":
-            return httpx.Response(200, content=self.login_token.encode())
+            if self.csrf_on_login:
+                return httpx.Response(403, text='{"message":"Access is denied. Invalid CSRF token."}')
+            return httpx.Response(200, headers={"Authorization": f"Bearer {self.login_token}"})
         if method == "GET" and path == "core/communities":
             return httpx.Response(200, json={"_embedded": {"communities": [
                 {"uuid": "cc", "name": "C1", "handle": "h/0"}
@@ -115,11 +121,15 @@ class RecordingClient:
         if method == "POST" and path.startswith("submission/workspaceitems"):
             return httpx.Response(201, json={"id": 7, "uuid": "wsid"})
         if method == "PATCH" and path.startswith("submission/workspaceitems/"):
+            if kwargs.get("json") == [{"op": "add", "path": "/sections/license/granted", "value": True}]:
+                return httpx.Response(200, json={"id": 7})
             return httpx.Response(200, json={"id": 7})
         if method == "GET" and path.startswith("submission/workspaceitems/"):
             return httpx.Response(200, json={"id": 7})
         if method == "POST" and path.startswith("workflow/workflowitems"):
-            return httpx.Response(201, json={"item": {"uuid": "item-123"}})
+            return httpx.Response(201, json={"id": 3015})
+        if method == "GET" and path == "workflow/workflowitems/3015/item":
+            return httpx.Response(200, json={"uuid": "item-123"})
         if method == "GET" and path.startswith("core/items/"):
             return httpx.Response(200, json={"uuid": "item-123", "handle": "123456789/42"})
         return httpx.Response(404, json={"message": f"no mock para {method} {path}"})
@@ -344,9 +354,11 @@ def test_connector_metodos_dspace9():
     )
     token = conn.authenticate()
     assert token == "tok-abc-123"
+    assert rc.requests[0][1].endswith("/server/api/security/csrf")
     method, url, kwargs = rc.requests[-1]
     assert method == "POST"
     assert url.endswith("/server/api/authn/login")
+    assert kwargs["headers"]["X-XSRF-TOKEN"] == rc.csrf_token
     assert kwargs["data"] == {"user": "user@x.org", "password": "pass"}
 
     conn.get_communities()
@@ -362,15 +374,17 @@ def test_connector_metodos_dspace9():
     assert ws["id"] == 7
     _, url, kw = rc.requests[-1]
     assert "submission/workspaceitems" in url
-    assert kw["params"] == {"parent": "u1"}
+    assert kw["params"] == {"owningCollection": "u1"}
 
-    conn.add_metadata(7, {"dc.title": ["Titulo"], "dc.contributor.author": ["Autor"]}, token)
-    _, url, kw = rc.requests[-1]
-    assert url.endswith("submission/workspaceitems/7")
-    ops = kw["json"]
-    assert ops[0]["op"] == "add"
-    assert ops[0]["path"] == "/sections/traditionalpageone/dc.title"
-    assert ops[0]["value"][0]["value"] == "Titulo"
+    conn.add_metadata(7, {"dc.title": ["Titulo"], "dc.creator": ["Autor"]}, token)
+    assert rc.requests[-2][1].endswith("submission/workspaceitems/7")
+    assert rc.requests[-1][1].endswith("submission/workspaceitems/7")
+    title_patch = rc.requests[-2][2]["json"]
+    author_patch = rc.requests[-1][2]["json"]
+    assert title_patch[0]["path"] == "/sections/traditionalpageone/dc.title"
+    assert title_patch[0]["value"][0]["value"] == "Titulo"
+    assert author_patch[0]["path"] == "/sections/traditionalpageone/dc.contributor.author"
+    assert author_patch[0]["value"][0]["value"] == "Autor"
 
     conn.upload_bitstream(7, "tesis.pdf", b"%PDF-1.4", token)
     _, url, kw = rc.requests[-1]
@@ -380,14 +394,39 @@ def test_connector_metodos_dspace9():
     submitted = conn.submit_workspace_item(7, token)
     assert submitted["item_uuid"] == "item-123"
     assert submitted["handle"] == "123456789/42"
-    assert "workflow/workflowitems" in rc.requests[-2][1]
-    assert "text/uri-list" in rc.requests[-2][2]["headers"]["Content-Type"]
+    assert rc.requests[-4][1].endswith("submission/workspaceitems/7")
+    assert rc.requests[-4][2]["json"][0]["path"] == "/sections/license/granted"
+    assert rc.requests[-2][1].endswith("workflow/workflowitems/3015/item")
+    assert rc.requests[-1][1].endswith("core/items/item-123")
 
     item = conn.get_item("item-123", token)
     assert item["handle"] == "123456789/42"
 
     ws_item = conn.get_workspace_item(7, token)
     assert ws_item["id"] == 7
+
+
+def test_connector_fallback_basic_auth_si_csrf_falla():
+    from app.dspace.connector import Dspace9Connector
+
+    rc = RecordingClient(csrf_on_login=True)
+    conn = Dspace9Connector(
+        api_url="http://dspace:8080/server/api",
+        username="user@x.org",
+        credential="pass",
+        client=rc,
+    )
+
+    token = conn.authenticate()
+    assert token == "tok-abc-123"
+    assert rc.requests[0][1].endswith("/server/api/security/csrf")
+    assert rc.requests[1][1].endswith("/server/api/authn/login")
+    assert rc.requests[1][2]["headers"]["X-XSRF-TOKEN"] == rc.csrf_token
+
+    conn.get_communities(token)
+    method, url, kwargs = rc.requests[-1]
+    assert method == "GET"
+    assert url.endswith("/server/api/core/communities")
 
 
 # ---------------------------------------------------------------------------

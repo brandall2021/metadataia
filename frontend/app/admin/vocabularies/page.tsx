@@ -42,8 +42,8 @@ const emptyValueForm = { code: "", label: "", normalized_value: "", synonyms: ""
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm backdrop-blur">
-      <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">{label}</div>
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
+      <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">{label}</div>
       <div className="mt-2 text-xl font-semibold tracking-tight">{value}</div>
     </div>
   );
@@ -51,8 +51,8 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 
 function SignalPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-muted/25 px-3 py-2.5 shadow-sm">
-      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 shadow-sm">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">{label}</div>
       <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
     </div>
   );
@@ -60,10 +60,10 @@ function SignalPill({ label, value }: { label: string; value: string }) {
 
 function CoverageBar({ value, label }: { value: number; label: string }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
-        <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">{value}%</span>
+        <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">{label}</p>
+        <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-[#4F46E5]">{value}%</span>
       </div>
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted/60">
         <div className="h-full rounded-full bg-gradient-to-r from-primary via-primary/70 to-emerald-500" style={{ width: `${value}%` }} />
@@ -307,22 +307,22 @@ export default function VocabulariesPage() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[2rem] border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/50 p-6 shadow-[0_24px_90px_-60px_rgba(15,23,42,0.45)]">
+      <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-[0_20px_50px_-34px_rgba(15,23,42,0.36)]">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-2">
-            <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-primary">
+            <span className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-[#4F46E5]">
               <Languages className="size-3.5" />
               Vocabularios
             </span>
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Vocabularios</h1>
-            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Vocabularios</h1>
+            <p className="max-w-2xl text-sm leading-6 text-slate-500">
               Cargá valores controlados, importá CSV y probá la normalización desde la misma pantalla.
             </p>
             <div className="flex flex-wrap gap-2">
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Valores controlados</span>
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Importación CSV</span>
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Normalización</span>
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Sinónimos</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500 shadow-sm">Valores controlados</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500 shadow-sm">Importación CSV</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500 shadow-sm">Normalización</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500 shadow-sm">Sinónimos</span>
             </div>
           </div>
           <div className="grid gap-3 sm:min-w-[360px] lg:w-[420px]">
@@ -330,10 +330,10 @@ export default function VocabulariesPage() {
               <MiniStat label="Vocabularios" value={String(vocabularies.length)} />
               <MiniStat label="Valores" value={String(selectedCount)} />
             </div>
-            <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Centro de control</p>
-                <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-300">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Centro de control</p>
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
                   Activo
                 </span>
               </div>
@@ -346,11 +346,11 @@ export default function VocabulariesPage() {
         </div>
       </section>
 
-      {error && <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+      {error && <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
 
       <div className="grid gap-6 xl:grid-cols-[0.96fr_1.04fr]">
         <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
-          <CardHeader className="border-b border-border/60 bg-muted/20">
+          <CardHeader className="border-b border-slate-200 bg-slate-50/80">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Plus className="size-4" />
               {selectedVocabulary ? "Editar vocabulario" : "Nuevo vocabulario"}
@@ -437,7 +437,7 @@ export default function VocabulariesPage() {
 
         <div className="space-y-6">
           <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
-            <CardHeader className="border-b border-border/60 bg-muted/20">
+            <CardHeader className="border-b border-slate-200 bg-slate-50/80">
               <CardTitle>Lista</CardTitle>
               <CardDescription>Seleccioná un vocabulario para editarlo.</CardDescription>
             </CardHeader>
@@ -448,7 +448,7 @@ export default function VocabulariesPage() {
                     key={vocab.id}
                     type="button"
                     onClick={() => selectVocabulary(vocab)}
-                    className={`w-full rounded-2xl border p-4 text-left shadow-sm transition-colors ${selectedId === vocab.id ? "border-primary/35 bg-primary/5" : "border-border/70 bg-background/80 hover:border-primary/20 hover:bg-muted/20"}`}
+                    className={`w-full rounded-2xl border p-4 text-left shadow-sm transition-colors ${selectedId === vocab.id ? "border-indigo-300 bg-indigo-50/70" : "border-slate-200 bg-slate-50 hover:border-indigo-200 hover:bg-slate-100"}`}
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0 space-y-1">
@@ -469,7 +469,7 @@ export default function VocabulariesPage() {
           </Card>
 
           <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
-            <CardHeader className="border-b border-border/60 bg-muted/20">
+            <CardHeader className="border-b border-slate-200 bg-slate-50/80">
               <CardTitle>Valores</CardTitle>
               <CardDescription>{selectedVocabulary ? `${selectedVocabulary.name} (${values.length} valores)` : "Seleccioná un vocabulario para ver sus valores."}</CardDescription>
             </CardHeader>

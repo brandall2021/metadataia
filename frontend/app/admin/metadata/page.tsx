@@ -164,51 +164,51 @@ export default function MetadataPage() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[2rem] border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/50 p-6 shadow-[0_24px_90px_-60px_rgba(15,23,42,0.45)]">
+      <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-[0_20px_50px_-34px_rgba(15,23,42,0.36)]">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-3">
-            <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-primary">
+            <span className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-[#4F46E5]">
               <BookMarked className="size-3.5" />
               Catálogo de metadatos
             </span>
             <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Metadatos</h1>
-              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Metadatos</h1>
+              <p className="max-w-2xl text-sm leading-6 text-slate-500">
                 Campos de metadatos. Un campo creado aparece aquí y en los formularios de documentos automáticamente, sin modificar código.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 shadow-sm">Esquemas</span>
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 shadow-sm">Campos</span>
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 shadow-sm">Carga dinámica</span>
+            <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 shadow-sm">Esquemas</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 shadow-sm">Campos</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 shadow-sm">Carga dinámica</span>
             </div>
           </div>
 
           <div className="grid gap-3 sm:min-w-[360px] lg:w-[420px]">
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm">
-                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-slate-500">
                   <Database className="size-3.5" />
                   Esquemas
                 </div>
                 <div className="mt-2 text-xl font-semibold tracking-tight">{schemas.length}</div>
               </div>
-              <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm">
-                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-slate-500">
                   <FileText className="size-3.5" />
                   Campos
                 </div>
                 <div className="mt-2 text-xl font-semibold tracking-tight">{fields.length}</div>
               </div>
-              <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm">
-                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-slate-500">
                   <Sparkles className="size-3.5" />
                   IA extractable
                 </div>
                 <div className="mt-2 text-xl font-semibold tracking-tight">{aiExtractableCount}</div>
               </div>
-              <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm">
-                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-slate-500">
                   <Layers3 className="size-3.5" />
                   Obligatorios
                 </div>
@@ -224,7 +224,7 @@ export default function MetadataPage() {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
         <div className="space-y-6">
           <Card className="overflow-hidden rounded-[1.5rem] border-border/70 shadow-sm">
-            <CardHeader className="border-b border-border/60 bg-muted/20">
+            <CardHeader className="border-b border-slate-200 bg-slate-50/80">
               <CardTitle className="text-base">Nuevo esquema</CardTitle>
               <CardDescription>Crea un esquema y luego agrega sus campos.</CardDescription>
             </CardHeader>
@@ -252,7 +252,7 @@ export default function MetadataPage() {
           </Card>
 
           <Card className="overflow-hidden rounded-[1.5rem] border-border/70 shadow-sm">
-            <CardHeader className="border-b border-border/60 bg-muted/20">
+            <CardHeader className="border-b border-slate-200 bg-slate-50/80">
               <CardTitle className="text-base">Nuevo campo</CardTitle>
               <CardDescription>
                 El formulario de carga lo construirá dinámicamente según estos atributos.
@@ -332,7 +332,7 @@ export default function MetadataPage() {
 
         <div className="space-y-6">
           <Card className="overflow-hidden rounded-[1.5rem] border-border/70 shadow-sm">
-            <CardHeader className="border-b border-border/60 bg-muted/20">
+            <CardHeader className="border-b border-slate-200 bg-slate-50/80">
               <CardTitle className="text-base">Campos</CardTitle>
               <CardDescription>Definiciones que alimentan los formularios dinámicos.</CardDescription>
             </CardHeader>
@@ -384,7 +384,7 @@ export default function MetadataPage() {
           </Card>
 
           <Card className="overflow-hidden rounded-[1.5rem] border-border/70 shadow-sm">
-            <CardHeader className="border-b border-border/60 bg-muted/20">
+            <CardHeader className="border-b border-slate-200 bg-slate-50/80">
               <CardTitle className="text-base">Esquemas</CardTitle>
               <CardDescription>Base semántica usada por los campos del formulario.</CardDescription>
             </CardHeader>

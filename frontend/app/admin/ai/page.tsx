@@ -84,8 +84,8 @@ function StatusBadge({ active, onClick }: { active: boolean; onClick: () => void
 
 function MiniStat({ label, value, icon: Icon }: { label: string; value: string; icon: LucideIcon }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm backdrop-blur">
-      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-slate-500">
         <Icon className="size-3.5" />
         {label}
       </div>
@@ -96,8 +96,8 @@ function MiniStat({ label, value, icon: Icon }: { label: string; value: string; 
 
 function SignalPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-muted/25 px-3 py-2.5 shadow-sm">
-      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 shadow-sm">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">{label}</div>
       <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
     </div>
   );
@@ -648,25 +648,25 @@ export default function AIPage() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[2rem] border border-border/70 bg-gradient-to-br from-primary/[0.09] via-background to-muted/50 p-6 shadow-[0_24px_90px_-60px_rgba(15,23,42,0.45)]">
+      <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-[0_20px_50px_-34px_rgba(15,23,42,0.36)]">
         <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl space-y-4">
-            <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-primary">
+            <span className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-[#4F46E5]">
               <Sparkles className="size-3.5" />
               Administración IA
             </span>
             <div className="space-y-3">
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Agentes IA</h1>
-              <p className="max-w-xl text-sm leading-6 text-muted-foreground">
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Agentes IA</h1>
+              <p className="max-w-xl text-sm leading-6 text-slate-500">
                 Acá se gobiernan los modelos y agentes de extracción: qué modelo usa cada
                 agente, sobre qué tipo documental actúa y con qué prompts trabaja.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Proveedores</span>
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Modelos</span>
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Agentes</span>
-              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs text-muted-foreground shadow-sm">Versiones</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500 shadow-sm">Proveedores</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500 shadow-sm">Modelos</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500 shadow-sm">Agentes</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500 shadow-sm">Versiones</span>
             </div>
           </div>
           <div className="grid gap-3 sm:min-w-[360px] lg:w-[420px]">
@@ -676,10 +676,10 @@ export default function AIPage() {
               <MiniStat label="Agentes" value={`${agents.length}`} icon={Layers3} />
               <MiniStat label="Vivos" value={`${activeAgents}`} icon={Bot} />
             </div>
-            <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Centro de control</p>
-                <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-300">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Centro de control</p>
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
                   Operativo
                 </span>
               </div>
@@ -696,13 +696,13 @@ export default function AIPage() {
       </section>
 
       {error && (
-        <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {error}
         </p>
       )}
 
-      <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
-        <CardHeader className="space-y-2 border-b border-border/60 bg-muted/20">
+      <Card className="overflow-hidden rounded-[1.5rem] border-slate-200 shadow-[0_14px_30px_-24px_rgba(15,23,42,0.32)]">
+        <CardHeader className="space-y-2 border-b border-slate-200 bg-slate-50/80">
           <CardTitle className="flex items-center gap-2 text-lg">
             <KeyRound className="size-4" />
             Proveedores de IA
@@ -1033,7 +1033,7 @@ export default function AIPage() {
         </Card>
 
         <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
-          <CardHeader className="space-y-2 border-b border-border/60 bg-muted/20">
+          <CardHeader className="space-y-2 border-b border-slate-200 bg-slate-50/80">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Cpu className="size-4" />
               Modelos
@@ -1092,11 +1092,11 @@ export default function AIPage() {
                     </label>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <label className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-2 text-sm">
+                    <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                       <input type="checkbox" checked={modelForm.supports_json} onChange={(e) => setModelForm({ ...modelForm, supports_json: e.target.checked })} />
                       JSON
                     </label>
-                    <label className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-2 text-sm">
+                    <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                       <input type="checkbox" checked={modelForm.supports_vision} onChange={(e) => setModelForm({ ...modelForm, supports_vision: e.target.checked })} />
                       Visión
                     </label>
@@ -1153,8 +1153,8 @@ export default function AIPage() {
         </Card>
       </div>
 
-      <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
-        <CardHeader className="space-y-2 border-b border-border/60 bg-muted/20">
+      <Card className="overflow-hidden rounded-[1.5rem] border-slate-200 shadow-[0_14px_30px_-24px_rgba(15,23,42,0.32)]">
+        <CardHeader className="space-y-2 border-b border-slate-200 bg-slate-50/80">
           <CardTitle className="text-lg">Agentes configurados</CardTitle>
           <CardDescription>
             Estado, modelo actual y acciones rápidas para cada agente.
@@ -1261,7 +1261,7 @@ export default function AIPage() {
       </Card>
 
       <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
-        <CardHeader className="space-y-2 border-b border-border/60 bg-muted/20">
+        <CardHeader className="space-y-2 border-b border-slate-200 bg-slate-50/80">
           <CardTitle className="text-lg">Versiones del agente</CardTitle>
           <CardDescription>
             {selectedAgentId ? "Historial y nueva versión para el agente seleccionado." : "Elegí un agente para ver su historial de versiones."}
@@ -1273,13 +1273,13 @@ export default function AIPage() {
               <div className="space-y-3">
                 <h3 className="text-sm font-medium">Nueva versión</h3>
                 {selectedAgent && (
-                  <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm">
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Agente seleccionado</p>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Agente seleccionado</p>
                     <p className="mt-1 font-medium text-foreground">{selectedAgent.name}</p>
                     <p className="mt-1 font-mono text-xs text-muted-foreground">{selectedAgent.code}</p>
                   </div>
                 )}
-                <div className="space-y-3 rounded-2xl border border-border/60 bg-background p-4">
+                <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
                   <label className="flex flex-col gap-1.5 text-sm">
                     <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Modelo</span>
                     <select className={inputCls} value={versionForm.model_id} onChange={(e) => setVersionForm({ ...versionForm, model_id: e.target.value })} required>

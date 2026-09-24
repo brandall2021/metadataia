@@ -78,8 +78,8 @@ function Stat({
 
 function MiniStat({ label, value, icon: Icon }: { label: string; value: string; icon: typeof Gauge }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm backdrop-blur">
-      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-slate-500">
         <Icon className="size-3.5" />
         {label}
       </div>
@@ -90,8 +90,8 @@ function MiniStat({ label, value, icon: Icon }: { label: string; value: string; 
 
 function SignalPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-muted/25 px-3 py-2.5 shadow-sm">
-      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 shadow-sm">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">{label}</div>
       <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
     </div>
   );
@@ -99,8 +99,8 @@ function SignalPill({ label, value }: { label: string; value: string }) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
-      <CardHeader className="border-b border-border/60 bg-muted/20">
+    <Card className="overflow-hidden rounded-[1.5rem] border-slate-200 shadow-[0_14px_30px_-24px_rgba(15,23,42,0.32)]">
+      <CardHeader className="border-b border-slate-200 bg-slate-50/80">
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
       <CardContent className="p-4">{children}</CardContent>
@@ -172,25 +172,25 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[2rem] border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/50 p-6 shadow-[0_24px_90px_-60px_rgba(15,23,42,0.45)]">
+      <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-[0_20px_50px_-34px_rgba(15,23,42,0.36)]">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-3">
-            <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-primary">
+            <span className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-[#4F46E5]">
               <Activity className="size-3.5" />
               Dashboard operativo
             </span>
             <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Dashboard</h1>
-              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Dashboard</h1>
+              <p className="max-w-2xl text-sm leading-6 text-slate-500">
                 Estado general del sistema: documentos, procesamiento, extracción IA y depósitos.
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/70 px-3 py-1 shadow-sm">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 shadow-sm">
                 <Shield className="size-3.5" />
                 Sistema estable
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/70 px-3 py-1 shadow-sm">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 shadow-sm">
                 <ArrowRight className="size-3.5" />
                 Vista resumen
               </span>
@@ -204,10 +204,10 @@ export default function DashboardPage() {
               <MiniStat label="Repositorios" value={fmtNum(data.repositorios)} icon={Database} />
               <MiniStat label="IA" value={fmtNum(ia.ejecuciones)} icon={Sparkles} />
             </div>
-            <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Centro de control</p>
-                <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-300">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Centro de control</p>
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
                   Activo
                 </span>
               </div>

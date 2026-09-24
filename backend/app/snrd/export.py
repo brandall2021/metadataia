@@ -3,15 +3,18 @@
 DC_ALIASES = {
     "creator": "dc.contributor.author",
     "date": "dc.date.issued",
-    "description": "dc.description.abstract",
     "language": "dc.language.iso",
+    "publisher": "dc.publisher",
+    "title": "dc.title",
+    "type": "dc.type",
+    "identifier": "dc.identifier.other",
 }
 
 
 def dc_key(element: str, qualifier: str | None = None) -> str:
     if element in DC_ALIASES:
         return DC_ALIASES[element]
-    return "dc." + element + (f".{qualifier}" if qualifier else "")
+    return ""
 
 
 def dc_fields(records, identifier: str | None = None) -> dict:
@@ -22,6 +25,8 @@ def dc_fields(records, identifier: str | None = None) -> dict:
         if fld is None or not rec.value:
             continue
         key = dc_key(fld.element, fld.qualifier or None)
+        if not key:
+            continue
         out.setdefault(key, []).append(
             {"value": rec.value, "language": rec.language, "authority": None, "confidence": -1}
         )

@@ -64,8 +64,8 @@ const LIMIT = 25;
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm backdrop-blur">
-      <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">{label}</div>
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
+      <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">{label}</div>
       <div className="mt-2 text-xl font-semibold tracking-tight">{value}</div>
     </div>
   );
@@ -73,7 +73,7 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 
 function Badge({ children }: { children: string }) {
   return (
-    <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-500">
       {children}
     </span>
   );
@@ -133,16 +133,16 @@ export default function AuditPage() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[2rem] border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/50 p-6 shadow-[0_24px_90px_-60px_rgba(15,23,42,0.45)]">
+      <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-[0_20px_50px_-34px_rgba(15,23,42,0.36)]">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-3">
-            <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-primary">
+            <span className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-[#4F46E5]">
               <Shield className="size-3.5" />
               Auditoría
             </span>
             <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Auditoría</h1>
-              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Auditoría</h1>
+              <p className="max-w-2xl text-sm leading-6 text-slate-500">
                 Registro de todas las operaciones: login, subida/borrado de documentos, extracción IA, cambios humanos, aprobaciones y depósitos.
               </p>
             </div>
@@ -158,10 +158,10 @@ export default function AuditPage() {
               <MiniStat label="Registros" value={String(total || 0)} />
               <MiniStat label="Página" value={String(current)} />
             </div>
-            <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm backdrop-blur">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Centro de control</p>
-                <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-300">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Centro de control</p>
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
                   {entityFilterActive ? "Filtrado" : "Completo"}
                 </span>
               </div>
@@ -174,10 +174,10 @@ export default function AuditPage() {
         </div>
       </section>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
 
-      <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
-        <CardHeader className="border-b border-border/60 bg-muted/20">
+      <Card className="overflow-hidden rounded-[1.5rem] border-slate-200 shadow-[0_14px_30px_-24px_rgba(15,23,42,0.32)]">
+        <CardHeader className="border-b border-slate-200 bg-slate-50/80">
           <CardTitle className="flex items-center gap-2">
             <Filter className="size-4" />
             Filtros
@@ -191,7 +191,7 @@ export default function AuditPage() {
           <label className="flex flex-col gap-1">
             Acción
             <select
-              className="rounded-lg border border-border bg-background px-3 py-2"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2"
               value={action}
               onChange={(e) => setAction(e.target.value)}
             >
@@ -206,7 +206,7 @@ export default function AuditPage() {
           <label className="flex flex-col gap-1">
             ID de entidad
             <input
-              className="rounded-lg border border-border bg-background px-3 py-2"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2"
               value={entityId}
               onChange={(e) => setEntityId(e.target.value)}
               placeholder="uuid del documento/repositorio…"

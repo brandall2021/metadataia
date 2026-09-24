@@ -1,4 +1,5 @@
 import json
+import time
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -827,6 +828,10 @@ def deposit_document(document_id: str) -> dict:
         )
         db.add(dep)
         db.commit()
+
+        # DSpace a veces necesita unos segundos para estabilizar el workspace item
+        # recién creado antes de aceptar el primer PATCH de metadata.
+        time.sleep(2)
 
         records = (
             db.query(MetadataRecord)

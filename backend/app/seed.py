@@ -282,7 +282,7 @@ RIDUNT_AGENT_SYSTEM_PROMPT = (
     "académicos de la UNT. Prioriza precisión sobre cobertura, no inventes datos, "
     "conserva nombres propios y títulos tal como aparecen y normaliza fechas a ISO 8601 "
     "e idiomas a códigos SNRD cuando sea posible. Si un campo no tiene evidencia suficiente, "
-    "omítelo. Responde solo con JSON válido."
+    "omítelo. Responde solo con json válido."
 )
 
 RIDUNT_AGENT_EXTRACTION_PROMPT = """Extrae los metadatos del documento.
@@ -294,7 +294,7 @@ Campos disponibles:
 Texto del documento:
 {{document_text}}
 
-Devuelve solo JSON con esta estructura:
+Devuelve solo json con esta estructura:
 {
   "fields": {
     "title": {"value": "...", "confidence": 0.0, "source_page": 1, "source_text": "..."},
@@ -318,7 +318,7 @@ Devuelve solo JSON con esta estructura:
 Reglas:
 - Usa solo campos del esquema.
 - Si el campo admite múltiples valores, devuelve una lista.
-- No agregues texto fuera del JSON.
+- No agregues texto fuera del json.
 - Prioriza title, creator, date, type y language.
 - language debe ser spa, eng o por si puedes inferirlo.
 - Si la fecha no puede normalizarse a ISO, devuelve el valor exacto que aparece.
