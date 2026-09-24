@@ -285,6 +285,7 @@ export default function ReviewPage() {
   const [toast, setToast] = useState<ToastState>(null);
   const [newRecord, setNewRecord] = useState({ field_id: "", value: "", confidence: "0.8" });
   const [updateDrafts, setUpdateDrafts] = useState<Record<string, string>>({});
+  const [documentTypeDraft, setDocumentTypeDraft] = useState("");
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const [activePane, setActivePane] = useState<PaneKey>("documents");
@@ -299,6 +300,7 @@ export default function ReviewPage() {
   const selectedDoc = review?.detail ?? null;
   const meta = selectedDoc ? documentHelpers.documentStatusMeta(selectedDoc.status) : null;
   const selectedDocType = useMemo(() => docTypes.find((type) => type.id === selectedDoc?.document_type_id) ?? null, [docTypes, selectedDoc?.document_type_id]);
+  const documentTypeDirty = documentTypeDraft !== (selectedDoc?.document_type_id ?? "");
   const fieldOptions = review?.docType?.fields ?? [];
   const existingRecordIds = new Set(review?.metadata.records.map((r) => r.metadata_field_id) ?? []);
   const missingFields = fieldOptions.filter((field) => !existingRecordIds.has(field.id));
@@ -312,6 +314,8 @@ export default function ReviewPage() {
   const criticalMissing = missingFields.filter((field) => field.required).length;
   const approveDisabled = criticalMissing > 0 || totalRecords === 0;
   const depositDisabled = selectedDoc?.status !== "APPROVED" || criticalMissing > 0;
+  const pendingRecordChanges = review?.metadata.records.filter((record) => (updateDrafts[record.id] ?? "") !== (record.value ?? "")) ?? [];
+  const hasPendingChanges = documentTypeDirty || pendingRecordChanges.length > 0;
 
   const typeMap = useMemo(() => new Map(docTypes.map((type) => [type.id, type])), [docTypes]);
 
@@ -372,6 +376,7 @@ export default function ReviewPage() {
         detail.document_type_id ? apiFetch<DocTypeDetail>(`/api/admin/document-types/${detail.document_type_id}`).catch(() => null) : Promise.resolve(null),
       ]);
       setReview({ detail, metadata, validation, depositions, docType });
+      setDocumentTypeDraft(detail.document_type_id ?? "");
       setUpdateDrafts((prev) => {
         const next: Record<string, string> = {};
         for (const record of metadata.records) next[record.id] = prev[record.id] ?? record.value ?? "";
@@ -457,19 +462,26 @@ export default function ReviewPage() {
   async function saveAllChanges() {
     if (!selectedId || !review) return;
     const changed = review.metadata.records.filter((record) => (updateDrafts[record.id] ?? "") !== (record.value ?? ""));
-    if (changed.length === 0) {
+    if (!documentTypeDirty && changed.length === 0) {
       pushToast("info", "No hay cambios para guardar");
       return;
     }
     setSaving("bulk");
     setError(null);
     try {
+      if (documentTypeDirty) {
+        await apiFetch(`/api/documents/${selectedId}`, {
+          method: "PUT",
+          body: JSON.stringify({ document_type_id: documentTypeDraft || null }),
+        });
+      }
       for (const record of changed) {
         await apiFetch(`/api/documents/${selectedId}/records/${record.id}`, {
           method: "PUT",
           body: JSON.stringify({ value: updateDrafts[record.id] ?? "" }),
         });
       }
+      await loadDocuments();
       await loadDetail(selectedId);
       pushToast("success", "Cambios guardados");
     } catch (err) {
@@ -584,6 +596,30 @@ export default function ReviewPage() {
     anchor.click();
     anchor.remove();
     window.URL.revokeObjectURL(url);
+  }
+
+  async function saveDocumentType() {
+    if (!selectedId || !selectedDoc) return;
+    if (!documentTypeDirty) {
+      pushToast("info", "El tipo documental no cambió");
+      return;
+    }
+    setSaving("type");
+    setError(null);
+    try {
+      await apiFetch(`/api/documents/${selectedId}`, {
+        method: "PUT",
+        body: JSON.stringify({ document_type_id: documentTypeDraft || null }),
+      });
+      await loadDocuments();
+      await loadDetail(selectedId);
+      pushToast("success", "Tipo documental guardado");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo guardar el tipo documental");
+      pushToast("error", "No se pudo guardar el tipo documental");
+    } finally {
+      setSaving(null);
+    }
   }
 
   const pdfPageCount = selectedDoc?.page_count ?? selectedDoc?.pages.length ?? 0;
@@ -805,6 +841,32 @@ export default function ReviewPage() {
                           <p className="text-sm font-medium">{selectedRecord.display_name}</p>
                           <p className="rounded-xl bg-background px-3 py-2 text-sm text-foreground">{selectedRecord.source_text || "Sin evidencia disponible"}</p>
                           <p className="text-xs text-muted-foreground">Página {selectedRecord.source_page ?? "—"} · {selectedRecord.source ?? "IA"}</p>
+                          <div className="space-y-3 rounded-2xl border border-border/60 bg-background p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Editar valor</span>
+                              <Badge tone={selectedRecord.validated ? "green" : selectedRecord.manually_modified ? "violet" : "amber"}>
+                                {selectedRecord.validated ? "Aprobado" : selectedRecord.manually_modified ? "Editado" : "Pendiente"}
+                              </Badge>
+                            </div>
+                            <textarea
+                              className={`${inputCls} min-h-28 resize-y`}
+                              value={updateDrafts[selectedRecord.id] ?? ""}
+                              onChange={(e) => setUpdateDrafts((prev) => ({ ...prev, [selectedRecord.id]: e.target.value }))}
+                              placeholder="Editar valor extraído"
+                            />
+                            <div className="flex flex-wrap gap-2">
+                              <Button type="button" variant="outline" size="sm" onClick={() => void saveRecord(selectedRecord.id)} disabled={saving === selectedRecord.id} className="gap-2">
+                                {saving === selectedRecord.id ? <Loader2 className="size-4 animate-spin" /> : <PenLine className="size-4" />}
+                                Guardar edición
+                              </Button>
+                              <Button type="button" variant="outline" size="sm" onClick={() => void validateRecord(selectedRecord.id)} disabled={saving === selectedRecord.id} className="gap-2">
+                                <Check className="size-4" />Aprobar
+                              </Button>
+                              <Button type="button" variant="outline" size="sm" onClick={() => void markIncorrect(selectedRecord.id)} disabled={saving === selectedRecord.id} className="gap-2 text-destructive">
+                                <X className="size-4" />Rechazar
+                              </Button>
+                            </div>
+                          </div>
                         </div>
                       ) : (
                         <EmptyState icon={Eye} title="Seleccioná un campo" description="Al tocar un campo verás aquí la evidencia asociada." />
@@ -880,13 +942,14 @@ export default function ReviewPage() {
                     {review.metadata.records.map((record) => {
                       const selected = record.id === selectedRecordId;
                       return (
-                        <button
+                        <div
                           key={record.id}
-                          type="button"
                           onClick={() => {
                             setSelectedRecordId(record.id);
                             setActivePane("pdf");
                           }}
+                          role="button"
+                          tabIndex={0}
                           className={`w-full rounded-2xl border px-3 py-3 text-left transition-all ${selected ? "border-primary/40 bg-primary/5 shadow-sm" : "border-border/60 bg-muted/10 hover:bg-muted/20"}`}
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -898,13 +961,24 @@ export default function ReviewPage() {
                               <p className="text-xs text-muted-foreground">{record.value || "Sin valor"}</p>
                               <p className="text-xs text-muted-foreground">Página {record.source_page ?? "—"} · {record.source ?? "IA"}</p>
                             </div>
-                            <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">
-                              <span>{Math.round((record.confidence ?? 0) * 100)}%</span>
-                              {record.manually_modified && <Badge tone="violet">Modificado manualmente</Badge>}
-                            </div>
+                          <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">
+                            <span>{Math.round((record.confidence ?? 0) * 100)}%</span>
+                            {record.manually_modified && <Badge tone="violet">Modificado manualmente</Badge>}
                           </div>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button type="button" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedRecordId(record.id); }} className="gap-2">
+                            <Edit3 className="size-4" />Editar
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); void validateRecord(record.id); }} disabled={saving === record.id} className="gap-2">
+                            <Check className="size-4" />Aprobar
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); void markIncorrect(record.id); }} disabled={saving === record.id} className="gap-2 text-destructive">
+                            <X className="size-4" />Rechazar
+                          </Button>
+                        </div>
                           {record.confidence !== null && record.confidence < 0.9 && <p className="mt-2 text-xs text-amber-600 dark:text-amber-300">Confianza menor a 90%</p>}
-                        </button>
+                        </div>
                       );
                     })}
                     {review.metadata.records.length === 0 && <EmptyState icon={FileText} title="Sin campos" description="Todavía no hay metadatos extraídos para revisar." />}
@@ -957,10 +1031,27 @@ export default function ReviewPage() {
                 </div>
 
                 <div className="space-y-3 rounded-2xl border border-border/60 bg-background p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Detalle del documento</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Detalle del documento</p>
+                    <Button type="button" variant="outline" size="sm" onClick={() => void saveDocumentType()} disabled={!documentTypeDirty || saving === "type"} className="gap-2">
+                      {saving === "type" ? <Loader2 className="size-4 animate-spin" /> : <PenLine className="size-4" />}
+                      Guardar tipo
+                    </Button>
+                  </div>
                   <div className="grid gap-2 text-sm">
                     <InfoRow label="Archivo" value={selectedDoc.original_filename ?? "—"} />
-                    <InfoRow label="Tipo" value={selectedDocType?.name ?? "Sin tipo"} />
+                    <div className="flex items-center justify-between gap-2 rounded-2xl border border-border/60 bg-background px-3 py-2">
+                      <span className="text-sm font-medium">Tipo documental</span>
+                      <select className={`${inputCls} max-w-[60%]`} value={documentTypeDraft} onChange={(e) => setDocumentTypeDraft(e.target.value)}>
+                        <option value="">Sin tipo</option>
+                        {docTypes.map((type) => (
+                          <option key={type.id} value={type.id}>
+                            {type.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <InfoRow label="Tipo actual" value={selectedDocType?.name ?? "Sin tipo"} />
                     <InfoRow label="Páginas" value={`${selectedDoc.page_count ?? 0}`} />
                     <InfoRow label="Creado" value={formatDate(selectedDoc.created_at)} />
                   </div>
@@ -1054,7 +1145,7 @@ export default function ReviewPage() {
                   {review.metadata.records.map((record) => {
                     const selected = record.id === selectedRecordId;
                     return (
-                      <button key={record.id} type="button" onClick={() => { setSelectedRecordId(record.id); setActivePane("pdf"); }} className={`w-full rounded-2xl border px-3 py-3 text-left ${selected ? "border-primary/40 bg-primary/5" : "border-border/60 bg-background"}`}>
+                      <div key={record.id} role="button" tabIndex={0} onClick={() => { setSelectedRecordId(record.id); setActivePane("pdf"); }} className={`w-full rounded-2xl border px-3 py-3 text-left ${selected ? "border-primary/40 bg-primary/5" : "border-border/60 bg-background"}`}>
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 space-y-1">
                             <div className="flex flex-wrap items-center gap-2"><span className="truncate text-sm font-medium">{record.display_name}</span><FieldStatus record={record} /></div>
@@ -1067,14 +1158,51 @@ export default function ReviewPage() {
                           </div>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2">
-                          <Button type="button" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); void saveRecord(record.id); }} disabled={saving === record.id} className="gap-2"><PenLine className="size-4" />Guardar</Button>
-                          <Button type="button" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); void validateRecord(record.id); }} disabled={saving === record.id} className="gap-2"><Check className="size-4" />Validar</Button>
-                          <Button type="button" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); void markIncorrect(record.id); }} disabled={saving === record.id} className="gap-2 text-destructive"><X className="size-4" />Incorrecto</Button>
+                          <Button type="button" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedRecordId(record.id); setActivePane("review"); }} className="gap-2">
+                            <Edit3 className="size-4" />Editar
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); void validateRecord(record.id); }} disabled={saving === record.id} className="gap-2">
+                            <Check className="size-4" />Aprobar
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); void markIncorrect(record.id); }} disabled={saving === record.id} className="gap-2 text-destructive">
+                            <X className="size-4" />Rechazar
+                          </Button>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
+
+                {selectedRecord && (
+                  <div className="space-y-3 rounded-2xl border border-border/60 bg-background p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Editar metadato</p>
+                      <FieldStatus record={selectedRecord} />
+                    </div>
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium">{selectedRecord.display_name}</p>
+                      <textarea
+                        className={`${inputCls} min-h-28 resize-y`}
+                        value={updateDrafts[selectedRecord.id] ?? ""}
+                        onChange={(e) => setUpdateDrafts((prev) => ({ ...prev, [selectedRecord.id]: e.target.value }))}
+                        placeholder="Editar valor extraído"
+                      />
+                      <p className="text-xs text-muted-foreground">Página {selectedRecord.source_page ?? "—"} · {selectedRecord.source ?? "IA"}</p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => void saveRecord(selectedRecord.id)} disabled={saving === selectedRecord.id} className="gap-2">
+                          {saving === selectedRecord.id ? <Loader2 className="size-4 animate-spin" /> : <PenLine className="size-4" />}
+                          Guardar edición
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={() => void validateRecord(selectedRecord.id)} disabled={saving === selectedRecord.id} className="gap-2">
+                          <Check className="size-4" />Aprobar
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={() => void markIncorrect(selectedRecord.id)} disabled={saving === selectedRecord.id} className="gap-2 text-destructive">
+                          <X className="size-4" />Rechazar
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : <div className="p-4"><EmptyState icon={FileText} title="Seleccioná un documento" description="Elegí un documento para revisar sus campos." /></div>}
           </Section>
@@ -1090,7 +1218,7 @@ export default function ReviewPage() {
               <span>· {criticalMissing} pendientes críticos</span>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => void saveAllChanges()} disabled={saving === "bulk"} className="gap-2">{saving === "bulk" ? <Loader2 className="size-4 animate-spin" /> : <PenLine className="size-4" />}Guardar revisión</Button>
+               <Button variant="outline" size="sm" onClick={() => void saveAllChanges()} disabled={saving === "bulk" || !hasPendingChanges} className="gap-2">{saving === "bulk" ? <Loader2 className="size-4 animate-spin" /> : <PenLine className="size-4" />}Guardar revisión</Button>
               <Button variant="outline" size="sm" onClick={() => void reviewAction("approve")} disabled={approveDisabled || saving === "approve"} className="gap-2 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-300">{saving === "approve" ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}Aprobar documento</Button>
             </div>
           </div>
