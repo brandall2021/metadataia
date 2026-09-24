@@ -8,6 +8,8 @@ import {
   Database,
   Download,
   FileText,
+  History,
+  Layers3,
   Loader2,
   RefreshCw,
   ScanSearch,
@@ -18,13 +20,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiFetch, apiFetchBlob, API_URL, getToken } from "@/lib/api";
 import * as documentHelpers from "@/lib/documents";
 
@@ -143,17 +139,40 @@ type ViewData = {
   depositions: Deposition[];
 };
 
-const inputCls =
-  "w-full rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus:border-ring focus:bg-muted/50 focus:ring-2 focus:ring-ring/30";
+type TabKey = "overview" | "metadata" | "validation" | "history";
+type ActionKey = "ocr" | "extract" | "normalize" | "validate" | "deposit";
 
-function Stat({ label, value, icon: Icon }: { label: string; value: string; icon: LucideIcon }) {
+const inputCls =
+  "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30";
+
+function formatBytes(value: number | null): string {
+  if (value === null) return "—";
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleString("es-AR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
+function statusTone(status: string): string {
+  return documentHelpers.documentStatusMeta(status).tone;
+}
+
+function StatCard({ label, value, hint, icon: Icon }: { label: string; value: string; hint?: string; icon: LucideIcon }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/75 px-4 py-3 shadow-sm">
+    <div className="rounded-2xl border border-border/70 bg-background/90 p-4 shadow-sm">
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
         <Icon className="size-3.5" />
         {label}
       </div>
-      <div className="mt-2 text-xl font-semibold tracking-tight">{value}</div>
+      <div className="mt-3 text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
+      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }
@@ -174,36 +193,69 @@ function Badge({ tone, children }: { tone: string; children: ReactNode }) {
   return <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${styles[tone] ?? styles.slate}`}>{children}</span>;
 }
 
-function Section({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+function Section({ title, description, children, actions }: { title: string; description?: string; children: ReactNode; actions?: ReactNode }) {
   return (
     <Card className="border-border/70 shadow-sm">
       <CardHeader className="space-y-2 border-b border-border/60 bg-muted/20">
-        <CardTitle className="text-lg">{title}</CardTitle>
-        {description && <CardDescription>{description}</CardDescription>}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <CardTitle className="text-lg">{title}</CardTitle>
+            {description && <CardDescription>{description}</CardDescription>}
+          </div>
+          {actions}
+        </div>
       </CardHeader>
       <CardContent className="p-0">{children}</CardContent>
     </Card>
   );
 }
 
-function formatBytes(value: number | null): string {
-  if (value === null) return "—";
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
-  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+function EmptyState({ icon: Icon, title, description }: { icon: LucideIcon; title: string; description: string }) {
+  return (
+    <div className="flex min-h-[320px] flex-col items-center justify-center rounded-3xl border border-dashed border-border/70 bg-muted/20 px-6 py-12 text-center">
+      <div className="flex size-12 items-center justify-center rounded-2xl bg-background shadow-sm">
+        <Icon className="size-5 text-muted-foreground" />
+      </div>
+      <h3 className="mt-4 text-base font-semibold">{title}</h3>
+      <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">{description}</p>
+    </div>
+  );
 }
 
-function formatDate(value: string | null): string {
-  if (!value) return "—";
-  return new Date(value).toLocaleString("es-AR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
+function TabButton({ active, children, onClick }: { active: boolean; children: ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-full px-3 py-2 text-sm font-medium transition-colors ${
+        active ? "bg-foreground text-background" : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
+  );
 }
 
-function statusTone(status: string): string {
-  const meta = documentHelpers.documentStatusMeta(status);
-  return meta.tone;
+function DetailField({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-background px-3 py-2.5">
+      <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
+      <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
+    </div>
+  );
+}
+
+function SummaryRow({ label, value, meta }: { label: string; value: ReactNode; meta?: ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-background px-3 py-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium">{label}</span>
+        {meta}
+      </div>
+      <div className="mt-1 text-sm text-muted-foreground">{value}</div>
+    </div>
+  );
 }
 
 export default function DocumentsPage() {
@@ -217,11 +269,18 @@ export default function DocumentsPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadDocumentType, setUploadDocumentType] = useState("");
+  const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
+  const docTypeMap = useMemo(() => new Map(docTypes.map((type) => [type.id, type])), [docTypes]);
   const selectedDoc = view?.detail ?? null;
   const meta = selectedDoc ? documentHelpers.documentStatusMeta(selectedDoc.status) : null;
   const busyJob = selectedDoc?.jobs.find((job) => ["PENDING", "RUNNING"].includes(job.status));
   const activeDocs = documents.filter((doc) => ["PROCESSING", "OCR_COMPLETED", "METADATA_EXTRACTED"].includes(doc.status)).length;
+  const approvedDocs = documents.filter((doc) => doc.status === "APPROVED").length;
+  const depositedDocs = documents.filter((doc) => doc.status === "DEPOSITED").length;
+
+  const selectedDocumentType = selectedDoc?.document_type_id ? docTypeMap.get(selectedDoc.document_type_id) ?? null : null;
+  const selectedIndex = useMemo(() => documents.findIndex((doc) => doc.id === selectedId), [documents, selectedId]);
 
   async function loadDocuments() {
     try {
@@ -233,8 +292,7 @@ export default function DocumentsPage() {
       setDocuments(docs);
       setDocTypes(types);
       setError(null);
-      if (!selectedId && docs[0]) setSelectedId(docs[0].id);
-      if (selectedId && !docs.some((doc) => doc.id === selectedId) && docs[0]) setSelectedId(docs[0].id);
+      setSelectedId((current) => (current && docs.some((doc) => doc.id === current) ? current : docs[0]?.id ?? null));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar documentos");
     } finally {
@@ -244,6 +302,7 @@ export default function DocumentsPage() {
 
   async function loadDetail(id: string) {
     setLoadingDetail(true);
+    setView(null);
     try {
       const [detail, metadata, validation, depositions] = await Promise.all([
         apiFetch<DocumentDetail>(`/api/documents/${id}`),
@@ -253,16 +312,16 @@ export default function DocumentsPage() {
       ]);
       setView({ detail, metadata, validation, depositions });
       setError(null);
+      setActiveTab("overview");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar el documento");
-      setView(null);
     } finally {
       setLoadingDetail(false);
     }
   }
 
   useEffect(() => {
-    loadDocuments();
+    void loadDocuments();
   }, []);
 
   useEffect(() => {
@@ -279,7 +338,7 @@ export default function DocumentsPage() {
   async function uploadDocument(e: FormEvent) {
     e.preventDefault();
     if (!uploadFile) {
-      setError("Elegí un PDF antes de cargar");
+      setError("Elegí un PDF antes de cargarlo");
       return;
     }
     setUploading(true);
@@ -312,7 +371,7 @@ export default function DocumentsPage() {
     }
   }
 
-  async function requestAction(action: "ocr" | "extract" | "normalize" | "validate" | "deposit") {
+  async function requestAction(action: ActionKey) {
     if (!selectedId) return;
     setError(null);
     try {
@@ -349,30 +408,65 @@ export default function DocumentsPage() {
   const canRequestValidation = documentHelpers.documentCanRequestValidation(view?.metadata);
   const canRequestDeposit = documentHelpers.documentCanRequestDeposit(view?.validation);
 
-  const selectedIndex = useMemo(() => documents.findIndex((doc) => doc.id === selectedId), [documents, selectedId]);
+  const actionButtons = [
+    {
+      key: "ocr" as const,
+      label: "Solicitar OCR",
+      hint: "Cuando el PDF no trae texto.",
+      icon: ScanSearch,
+      can: canRequestOcr,
+    },
+    {
+      key: "extract" as const,
+      label: "Extraer metadatos",
+      hint: "Lanza el análisis IA sobre texto disponible.",
+      icon: Sparkles,
+      can: canRequestExtraction,
+    },
+    {
+      key: "normalize" as const,
+      label: "Normalizar",
+      hint: "Ajusta valores al formato esperado.",
+      icon: Wrench,
+      can: canRequestNormalization,
+    },
+    {
+      key: "validate" as const,
+      label: "Validar",
+      hint: "Ejecuta las reglas de consistencia.",
+      icon: CheckCircle2,
+      can: canRequestValidation,
+    },
+    {
+      key: "deposit" as const,
+      label: "Depositar",
+      hint: "Envía el documento al repositorio.",
+      icon: Clock3,
+      can: canRequestDeposit,
+    },
+  ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-4">
       <section className="rounded-3xl border border-border/70 bg-gradient-to-br from-primary/[0.08] via-background to-muted/40 p-6 shadow-sm">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl space-y-3">
             <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-primary">
-              <Sparkles className="size-3.5" />
-              Flujo de documentos
+              <Layers3 className="size-3.5" />
+              Workspace de documentos
             </span>
             <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-tight">Documentos</h1>
-              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                Carga, análisis, OCR y extracción de metadatos. Desde acá se sube el PDF,
-                se sigue el estado y se dispara cada etapa del pipeline.
+              <h1 className="text-3xl font-semibold tracking-tight text-pretty">Documentos</h1>
+              <p className="max-w-2xl text-sm leading-6 text-muted-foreground text-balance">
+                Carga, análisis, OCR, extracción y depósito en un solo lugar. Seleccioná un PDF y seguí el flujo completo sin salir de esta pantalla.
               </p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:min-w-[360px] lg:w-[420px]">
-            <Stat label="Cargados" value={`${documents.length}`} icon={Database} />
-            <Stat label="En flujo" value={`${activeDocs}`} icon={Loader2} />
-            <Stat label="Selección" value={selectedDoc ? `#${selectedIndex + 1}` : "—"} icon={FileText} />
-            <Stat label="Tipos" value={`${docTypes.length}`} icon={CheckCircle2} />
+            <StatCard label="Documentos" value={`${documents.length}`} hint="En el repositorio" icon={Database} />
+            <StatCard label="Activos" value={`${activeDocs}`} hint="En procesamiento" icon={Loader2} />
+            <StatCard label="Aprobados" value={`${approvedDocs}`} hint="Listos para depositar" icon={CheckCircle2} />
+            <StatCard label="Depositados" value={`${depositedDocs}`} hint="Cerrados" icon={Clock3} />
           </div>
         </div>
       </section>
@@ -383,12 +477,13 @@ export default function DocumentsPage() {
         </p>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(360px,0.92fr)_1.08fr]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(360px,0.95fr)_1.05fr]">
         <div className="space-y-6">
-          <Section title="Cargar PDF" description="Sube un PDF y opcionalmente asígnale un tipo documental.">
+          <Section title="Cargar PDF" description="Subí un archivo y, si querés, asignale un tipo documental.">
             <form onSubmit={uploadDocument} className="space-y-4 p-4">
-              <label className="block">
-                <span className="mb-1 block text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              <label className="block rounded-3xl border border-dashed border-border/70 bg-muted/20 p-4 transition-colors hover:bg-muted/30">
+                <span className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                  <UploadCloud className="size-3.5" />
                   Archivo PDF
                 </span>
                 <input
@@ -397,7 +492,11 @@ export default function DocumentsPage() {
                   className={inputCls}
                   onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
                 />
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {uploadFile ? `${uploadFile.name} · ${formatBytes(uploadFile.size)}` : "Arrastrá o seleccioná un archivo para comenzar."}
+                </p>
               </label>
+
               <label className="block">
                 <span className="mb-1 block text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
                   Tipo documental
@@ -416,10 +515,11 @@ export default function DocumentsPage() {
                 </select>
                 {docTypes.length === 0 && (
                   <p className="mt-2 text-xs text-muted-foreground">
-                    No hay acceso a tipos documentales o todavía no se cargaron.
+                    No pudimos cargar la lista de tipos documentales.
                   </p>
                 )}
               </label>
+
               <Button type="submit" disabled={uploading} className="w-full gap-2">
                 {uploading ? <Loader2 className="size-4 animate-spin" /> : <UploadCloud className="size-4" />}
                 {uploading ? "Cargando…" : "Subir PDF"}
@@ -438,6 +538,7 @@ export default function DocumentsPage() {
                 return (
                   <button
                     key={doc.id}
+                    type="button"
                     className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors ${
                       selected ? "bg-primary/5" : "hover:bg-muted/30"
                     }`}
@@ -448,9 +549,7 @@ export default function DocumentsPage() {
                     </div>
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="truncate font-medium">
-                          {doc.original_filename ?? doc.sha256 ?? doc.id}
-                        </span>
+                        <span className="truncate font-medium">{doc.original_filename ?? doc.sha256 ?? doc.id}</span>
                         <Badge tone={metaDoc.tone}>{metaDoc.label}</Badge>
                       </div>
                       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -475,139 +574,177 @@ export default function DocumentsPage() {
           </Section>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-6 xl:sticky xl:top-6 xl:self-start">
           <Section
             title={selectedDoc ? selectedDoc.original_filename ?? selectedDoc.sha256 ?? selectedDoc.id : "Detalle"}
-            description={selectedDoc ? "Estado, acciones y trazabilidad del documento seleccionado." : "Elegí un documento para ver el detalle."}
+            description={selectedDoc ? "Estado, acciones y trazabilidad del documento seleccionado." : "Elegí un documento para ver el flujo completo."}
+            actions={
+              selectedDoc ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={() => void loadDetail(selectedDoc.id)} className="gap-2">
+                    <RefreshCw className="size-4" />
+                    Refrescar
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-2" onClick={() => void downloadDocument()}>
+                    <Download className="size-4" />
+                    Descargar
+                  </Button>
+                </div>
+              ) : null
+            }
           >
             {selectedDoc && view && meta ? (
               <div className="space-y-6 p-4">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="space-y-2">
+                <div className="flex flex-col gap-4 rounded-3xl border border-border/60 bg-muted/10 p-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge tone={meta.tone}>{meta.label}</Badge>
                       {busyJob && <Badge tone="slate">Job {busyJob.status.toLowerCase()}</Badge>}
+                      {selectedDocumentType && <Badge tone="primary">{selectedDocumentType.code}</Badge>}
                     </div>
-                    <p className="max-w-2xl text-sm text-muted-foreground">{meta.description}</p>
-                    <dl className="grid gap-3 text-sm md:grid-cols-2 lg:grid-cols-3">
-                      <div className="rounded-2xl bg-muted/30 px-3 py-2">
-                        <dt className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Archivo</dt>
-                        <dd className="mt-1 font-medium">{selectedDoc.original_filename ?? "—"}</dd>
-                      </div>
-                      <div className="rounded-2xl bg-muted/30 px-3 py-2">
-                        <dt className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Peso</dt>
-                        <dd className="mt-1 font-medium">{formatBytes(selectedDoc.file_size)}</dd>
-                      </div>
-                      <div className="rounded-2xl bg-muted/30 px-3 py-2">
-                        <dt className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Páginas</dt>
-                        <dd className="mt-1 font-medium">{selectedDoc.page_count ?? 0}</dd>
-                      </div>
-                      <div className="rounded-2xl bg-muted/30 px-3 py-2">
-                        <dt className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Texto extraído</dt>
-                        <dd className="mt-1 font-medium">{view.detail.analysis.total_text_length.toLocaleString("es-AR")} caracteres</dd>
-                      </div>
-                      <div className="rounded-2xl bg-muted/30 px-3 py-2">
-                        <dt className="text-xs uppercase tracking-[0.18em] text-muted-foreground">OCR</dt>
-                        <dd className="mt-1 font-medium">{selectedDoc.needs_ocr ? "Requerido" : "No requerido"}</dd>
-                      </div>
-                      <div className="rounded-2xl bg-muted/30 px-3 py-2">
-                        <dt className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Creado</dt>
-                        <dd className="mt-1 font-medium">{formatDate(selectedDoc.created_at)}</dd>
-                      </div>
-                    </dl>
+                    <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{meta.description}</p>
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <DetailField label="Archivo" value={selectedDoc.original_filename ?? "—"} />
+                      <DetailField label="Tipo documental" value={selectedDocumentType ? selectedDocumentType.name : "Sin asociar"} />
+                      <DetailField label="Peso" value={formatBytes(selectedDoc.file_size)} />
+                      <DetailField label="Páginas" value={selectedDoc.page_count ?? 0} />
+                      <DetailField label="Texto total" value={`${view.detail.analysis.total_text_length.toLocaleString("es-AR")} caracteres`} />
+                      <DetailField label="Creado" value={formatDate(selectedDoc.created_at)} />
+                    </div>
                   </div>
-
-                  <div className="flex flex-wrap gap-2 lg:justify-end">
-                    <Button variant="outline" size="sm" onClick={() => void loadDetail(selectedDoc.id)} className="gap-2">
-                      <RefreshCw className="size-4" />
-                      Refrescar
-                    </Button>
-                    <Button variant="outline" size="sm" className="gap-2" onClick={() => void downloadDocument()}>
-                      <Download className="size-4" />
-                      Descargar
-                    </Button>
-                    <Button variant="outline" size="sm" disabled={!canRequestOcr} onClick={() => void requestAction("ocr")} className="gap-2">
-                      <ScanSearch className="size-4" />
-                      OCR
-                    </Button>
-                    <Button variant="outline" size="sm" disabled={!canRequestExtraction} onClick={() => void requestAction("extract")} className="gap-2">
-                      <Sparkles className="size-4" />
-                      Extraer
-                    </Button>
-                    <Button variant="outline" size="sm" disabled={!canRequestNormalization} onClick={() => void requestAction("normalize")} className="gap-2">
-                      <Wrench className="size-4" />
-                      Normalizar
-                    </Button>
-                    <Button variant="outline" size="sm" disabled={!canRequestValidation} onClick={() => void requestAction("validate")} className="gap-2">
-                      <CheckCircle2 className="size-4" />
-                      Validar
-                    </Button>
-                    <Button variant="outline" size="sm" disabled={!canRequestDeposit} onClick={() => void requestAction("deposit")} className="gap-2">
-                      <Clock3 className="size-4" />
-                      Depositar
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Análisis</p>
-                    <ul className="mt-3 space-y-2 text-sm">
-                      <li>Texto total: {view.detail.analysis.total_text_length.toLocaleString("es-AR")}</li>
-                      <li>Necesita OCR: {view.detail.analysis.needs_ocr ? "sí" : "no"}</li>
-                      <li>Estado interno: {view.detail.analysis.status}</li>
-                    </ul>
-                  </div>
-                  <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Jobs</p>
-                    <ul className="mt-3 space-y-2 text-sm">
-                      {view.detail.jobs.slice(0, 3).map((job) => (
-                        <li key={job.id} className="flex items-center justify-between gap-2">
-                          <span>{job.job_type}</span>
-                          <Badge tone={statusTone(job.status)}>{job.status}</Badge>
-                        </li>
-                      ))}
-                      {view.detail.jobs.length === 0 && <li className="text-muted-foreground">Sin jobs.</li>}
-                    </ul>
-                  </div>
-                  <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Trazabilidad</p>
-                    <ul className="mt-3 space-y-2 text-sm">
-                      <li>Metadatos: {view.metadata.records.length}</li>
-                      <li>Validaciones: {view.validation.results.length}</li>
-                      <li>Depósitos: {view.depositions.length}</li>
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-2xl border border-border/70 bg-muted/10 p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Páginas</p>
-                    <div className="mt-3 space-y-3">
-                      {view.detail.pages.slice(0, 6).map((page) => (
-                        <div key={page.id} className="rounded-2xl border border-border/60 bg-background p-3">
-                          <div className="flex items-center justify-between gap-2 text-sm">
-                            <span className="font-medium">Página {page.page_number}</span>
-                            <span className="text-xs text-muted-foreground">{page.ocr_used ? "OCR" : "Texto original"}</span>
+                  <div className="grid grid-cols-2 gap-2 lg:min-w-[320px]">
+                    {actionButtons.map((action) => {
+                      const Icon = action.icon;
+                      return (
+                        <button
+                          key={action.key}
+                          type="button"
+                          disabled={!action.can}
+                          onClick={() => void requestAction(action.key)}
+                          className={`rounded-2xl border px-3 py-3 text-left transition-all ${
+                            action.can
+                              ? "border-border/70 bg-background hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-sm"
+                              : "border-border/50 bg-muted/30 text-muted-foreground"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <Icon className="size-4 shrink-0" />
+                            <span className="text-[11px] uppercase tracking-[0.18em]">{action.can ? "listo" : "bloqueado"}</span>
                           </div>
-                          <p className="mt-2 text-xs text-muted-foreground line-clamp-3">{page.text || "Sin texto"}</p>
+                          <div className="mt-3 text-sm font-medium">{action.label}</div>
+                          <div className="mt-1 text-xs leading-5 text-muted-foreground">{action.hint}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 border-b border-border/60 pb-4">
+                  <TabButton active={activeTab === "overview"} onClick={() => setActiveTab("overview")}>
+                    Resumen
+                  </TabButton>
+                  <TabButton active={activeTab === "metadata"} onClick={() => setActiveTab("metadata")}>
+                    Metadatos
+                  </TabButton>
+                  <TabButton active={activeTab === "validation"} onClick={() => setActiveTab("validation")}>
+                    Validación
+                  </TabButton>
+                  <TabButton active={activeTab === "history"} onClick={() => setActiveTab("history")}>
+                    Historial
+                  </TabButton>
+                </div>
+
+                {activeTab === "overview" && (
+                  <div className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <SummaryRow label="Análisis" value={view.detail.analysis.status} meta={<Badge tone={statusTone(view.detail.analysis.status)}>{view.detail.analysis.status}</Badge>} />
+                      <SummaryRow label="OCR" value={view.detail.analysis.needs_ocr ? "Requerido" : "No requerido"} />
+                      <SummaryRow label="Jobs activos" value={busyJob ? `${busyJob.job_type} · ${busyJob.status}` : "Sin jobs activos"} />
+                    </div>
+
+                    <div className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
+                      <div className="rounded-2xl border border-border/70 bg-muted/10 p-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Páginas</p>
+                          <span className="text-xs text-muted-foreground">{view.detail.pages.length} páginas</span>
                         </div>
-                      ))}
-                      {view.detail.pages.length === 0 && <p className="text-sm text-muted-foreground">Sin páginas cargadas.</p>}
+                        <div className="mt-3 space-y-3">
+                          {view.detail.pages.slice(0, 6).map((page) => (
+                            <div key={page.id} className="rounded-2xl border border-border/60 bg-background p-3">
+                              <div className="flex items-center justify-between gap-2 text-sm">
+                                <span className="font-medium">Página {page.page_number}</span>
+                                <span className="text-xs text-muted-foreground">{page.ocr_used ? "OCR" : "Texto original"}</span>
+                              </div>
+                              <p className="mt-2 line-clamp-3 text-xs leading-5 text-muted-foreground">{page.text || "Sin texto"}</p>
+                            </div>
+                          ))}
+                          {view.detail.pages.length === 0 && <p className="text-sm text-muted-foreground">Sin páginas cargadas.</p>}
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="rounded-2xl border border-border/70 bg-muted/10 p-4">
+                          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Estado del flujo</p>
+                          <div className="mt-3 space-y-2 text-sm">
+                            <div className="flex items-center justify-between gap-2">
+                              <span>Metadatos extraídos</span>
+                              <span className="font-medium">{view.metadata.records.length}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span>Validaciones</span>
+                              <span className="font-medium">{view.validation.results.length}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span>Depósitos</span>
+                              <span className="font-medium">{view.depositions.length}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-border/70 bg-muted/10 p-4">
+                          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Última actividad</p>
+                          <div className="mt-3 space-y-3 text-sm">
+                            {view.detail.jobs.slice(0, 3).map((job) => (
+                              <div key={job.id} className="rounded-2xl border border-border/60 bg-background p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-medium">{job.job_type}</span>
+                                  <Badge tone={statusTone(job.status)}>{job.status}</Badge>
+                                </div>
+                                <p className="mt-1 text-xs text-muted-foreground">{formatDate(job.started_at)} · {job.progress ?? 0}%</p>
+                              </div>
+                            ))}
+                            {view.detail.jobs.length === 0 && <p className="text-sm text-muted-foreground">Sin jobs registrados.</p>}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
+                )}
 
+                {activeTab === "metadata" && (
                   <div className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <SummaryRow label="Registros" value={view.metadata.records.length} />
+                      <SummaryRow label="Runs" value={view.metadata.runs.length} />
+                      <SummaryRow label="Documento" value={view.metadata.document_status} meta={<Badge tone={statusTone(view.metadata.document_status)}>{view.metadata.document_status}</Badge>} />
+                    </div>
+
                     <div className="rounded-2xl border border-border/70 bg-muted/10 p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Metadatos extraídos</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Metadatos extraídos</p>
+                        <span className="text-xs text-muted-foreground">{view.metadata.records.filter((record) => record.validated).length} validados</span>
+                      </div>
                       <div className="mt-3 space-y-2">
-                        {view.metadata.records.slice(0, 8).map((record) => (
+                        {view.metadata.records.slice(0, 12).map((record) => (
                           <div key={record.id} className="rounded-2xl border border-border/60 bg-background p-3">
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-sm font-medium">{record.display_name}</span>
-                              <Badge tone={record.validated ? "green" : record.normalized ? "emerald" : "slate"}>
-                                {record.validated ? "Validado" : record.normalized ? "Normalizado" : "Pendiente"}
-                              </Badge>
+                              <div className="flex flex-wrap gap-2">
+                                <Badge tone={record.validated ? "green" : record.normalized ? "emerald" : "slate"}>
+                                  {record.validated ? "Validado" : record.normalized ? "Normalizado" : "Pendiente"}
+                                </Badge>
+                                {record.manually_modified && <Badge tone="amber">Editado</Badge>}
+                              </div>
                             </div>
                             <p className="mt-1 text-sm text-foreground">{record.value ?? "—"}</p>
                             <p className="mt-1 text-xs text-muted-foreground">
@@ -615,48 +752,144 @@ export default function DocumentsPage() {
                             </p>
                           </div>
                         ))}
-                        {view.metadata.records.length === 0 && <p className="text-sm text-muted-foreground">Sin metadatos aún.</p>}
+                        {view.metadata.records.length === 0 && <EmptyState icon={FileText} title="Sin metadatos" description="Todavía no hay extracción para este documento." />}
                       </div>
                     </div>
 
                     <div className="rounded-2xl border border-border/70 bg-muted/10 p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Validaciones y depósitos</p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Runs</p>
                       <div className="mt-3 space-y-2">
-                        {view.validation.results.slice(0, 4).map((result) => (
-                          <div key={result.id} className="rounded-2xl border border-border/60 bg-background p-3 text-sm">
+                        {view.metadata.runs.slice(0, 6).map((run) => (
+                          <div key={run.id} className="rounded-2xl border border-border/60 bg-background p-3">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="font-medium">{result.validator_type}</span>
-                              <Badge tone={statusTone(result.status)}>{result.status}</Badge>
+                              <span className="text-sm font-medium">{run.model_id ?? run.agent_id ?? "Run"}</span>
+                              <Badge tone={statusTone(run.status)}>{run.status}</Badge>
                             </div>
-                            <p className="mt-1 text-xs text-muted-foreground">{formatDate(result.created_at)}</p>
+                            <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                              <span>{formatDate(run.started_at)}</span>
+                              <span>·</span>
+                              <span>{run.input_tokens ?? 0} in</span>
+                              <span>·</span>
+                              <span>{run.output_tokens ?? 0} out</span>
+                            </div>
                           </div>
                         ))}
-                        {view.validation.results.length === 0 && <p className="text-sm text-muted-foreground">Sin validaciones.</p>}
-                        {view.depositions.slice(0, 4).map((deposition) => (
-                          <div key={deposition.id} className="rounded-2xl border border-border/60 bg-background p-3 text-sm">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-medium">Depósito</span>
-                              <Badge tone={statusTone(deposition.status)}>{deposition.status}</Badge>
-                            </div>
-                            <p className="mt-1 text-xs text-muted-foreground">{deposition.handle ?? deposition.external_item_id ?? "Sin handle"}</p>
-                          </div>
-                        ))}
-                        {view.depositions.length === 0 && <p className="text-sm text-muted-foreground">Sin depósitos.</p>}
+                        {view.metadata.runs.length === 0 && <p className="text-sm text-muted-foreground">Sin runs registrados.</p>}
                       </div>
                     </div>
                   </div>
-                </div>
+                )}
+
+                {activeTab === "validation" && (
+                  <div className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <SummaryRow label="Resultados" value={view.validation.results.length} />
+                      <SummaryRow label="Documento" value={view.validation.document_status} meta={<Badge tone={statusTone(view.validation.document_status)}>{view.validation.document_status}</Badge>} />
+                      <SummaryRow label="Listo para depósito" value={canRequestDeposit ? "Sí" : "No"} />
+                    </div>
+
+                    <div className="rounded-2xl border border-border/70 bg-muted/10 p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Validaciones</p>
+                      <div className="mt-3 space-y-2">
+                        {view.validation.results.map((result) => (
+                          <div key={result.id} className="rounded-2xl border border-border/60 bg-background p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-medium">{result.validator_type}</span>
+                              <Badge tone={statusTone(result.status)}>{result.status}</Badge>
+                            </div>
+                            <p className="mt-1 text-xs text-muted-foreground">{formatDate(result.created_at)}</p>
+                            {Array.isArray(result.errors_json) && result.errors_json.length > 0 && (
+                              <p className="mt-2 text-xs text-destructive">Errores: {result.errors_json.length}</p>
+                            )}
+                            {Array.isArray(result.warnings_json) && result.warnings_json.length > 0 && (
+                              <p className="mt-1 text-xs text-amber-600 dark:text-amber-300">Advertencias: {result.warnings_json.length}</p>
+                            )}
+                          </div>
+                        ))}
+                        {view.validation.results.length === 0 && <EmptyState icon={CheckCircle2} title="Sin validaciones" description="Todavía no se ejecutó ninguna validación sobre este documento." />}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === "history" && (
+                  <div className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <SummaryRow label="Jobs" value={view.detail.jobs.length} />
+                      <SummaryRow label="Depósitos" value={view.depositions.length} />
+                      <SummaryRow label="Estado" value={view.detail.status} meta={<Badge tone={meta.tone}>{meta.label}</Badge>} />
+                    </div>
+
+                    <div className="rounded-2xl border border-border/70 bg-muted/10 p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Jobs y depósitos</p>
+                        <History className="size-4 text-muted-foreground" />
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {view.detail.jobs.slice(0, 6).map((job) => (
+                          <div key={job.id} className="rounded-2xl border border-border/60 bg-background p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-medium">{job.job_type}</span>
+                              <Badge tone={statusTone(job.status)}>{job.status}</Badge>
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                              <span>{formatDate(job.started_at)}</span>
+                              <span>·</span>
+                              <span>Progreso {job.progress ?? 0}%</span>
+                            </div>
+                            {job.error_message && <p className="mt-2 text-xs text-destructive">{job.error_message}</p>}
+                          </div>
+                        ))}
+                        {view.detail.jobs.length === 0 && <p className="text-sm text-muted-foreground">Sin jobs registrados.</p>}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-border/70 bg-muted/10 p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Depósitos</p>
+                      <div className="mt-3 space-y-2">
+                        {view.depositions.map((deposition) => (
+                          <div key={deposition.id} className="rounded-2xl border border-border/60 bg-background p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-medium">{deposition.handle ?? deposition.external_item_id ?? deposition.id}</span>
+                              <Badge tone={statusTone(deposition.status)}>{deposition.status}</Badge>
+                            </div>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {formatDate(deposition.started_at)} · {formatDate(deposition.finished_at)}
+                            </p>
+                            {deposition.error_message && <p className="mt-2 text-xs text-destructive">{deposition.error_message}</p>}
+                          </div>
+                        ))}
+                        {view.depositions.length === 0 && <p className="text-sm text-muted-foreground">Sin depósitos todavía.</p>}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : loadingDetail ? (
-              <div className="flex min-h-[360px] items-center justify-center p-8 text-sm text-muted-foreground">
-                Cargando detalle…
+              <div className="space-y-4 p-4">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="h-20 animate-pulse rounded-2xl bg-muted/40" />
+                  <div className="h-20 animate-pulse rounded-2xl bg-muted/40" />
+                  <div className="h-20 animate-pulse rounded-2xl bg-muted/40" />
+                </div>
+                <div className="h-[420px] animate-pulse rounded-3xl bg-muted/40" />
               </div>
             ) : (
-              <div className="flex min-h-[360px] items-center justify-center p-8 text-center text-sm text-muted-foreground">
-                Seleccioná un documento para ver el flujo completo.
+              <div className="p-4">
+                <EmptyState
+                  icon={FileText}
+                  title="Seleccioná un documento"
+                  description="Elegí un PDF en la lista para ver el detalle, los metadatos, la validación y la trazabilidad."
+                />
               </div>
             )}
           </Section>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <StatCard label="Selección" value={selectedDoc ? `#${selectedIndex + 1}` : "—"} hint="Documento activo" icon={FileText} />
+            <StatCard label="Texto" value={selectedDoc ? `${selectedDoc.analysis.total_text_length.toLocaleString("es-AR")}` : "—"} hint="Carácteres extraídos" icon={Sparkles} />
+            <StatCard label="Jobs" value={selectedDoc ? `${selectedDoc.jobs.length}` : "—"} hint="Trazabilidad disponible" icon={History} />
+          </div>
         </div>
       </div>
     </div>
