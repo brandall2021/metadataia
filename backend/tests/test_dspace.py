@@ -12,7 +12,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app.core import storage
+from app.core import database, storage  # noqa: F401  (database inicializa los modelos antes de importar engine)
 from app.extraction import engine
 from app.jobs.tasks import deposit_document, extract_metadata
 from app.main import create_app

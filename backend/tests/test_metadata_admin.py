@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from app.core.database import SessionLocal
 from app.main import create_app
+from app.metadata.ridunt_profile import RIDUNT_PROFILE_FIELDS
 from app.models import AIAgent, AIModel, AIProvider, DocumentType, MetadataField, MetadataSchema, Vocabulary
 
 UUID = str
@@ -120,6 +121,46 @@ def test_schemas_sin_permiso_403(client, catalogador_headers):
 
 
 # --- esquemas ----------------------------------------------------------------
+
+def test_aplicar_perfil_ridunt_idempotente(client, admin_headers, catalogador_headers):
+    r = client.post("/api/admin/metadata/ridunt-profile", headers=catalogador_headers)
+    assert r.status_code == 403
+
+    r = client.post("/api/admin/metadata/ridunt-profile", headers=admin_headers)
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["code"] == "snrd-dc"
+    assert data["field_count"] >= len(RIDUNT_PROFILE_FIELDS)
+
+    fields = client.get(
+        f"/api/admin/metadata/fields?schema_id={data['id']}", headers=admin_headers
+    ).json()
+    keys = {
+        f"{f['element']}.{f['qualifier']}" if f["qualifier"] else f["element"]
+        for f in fields
+        if f["active"]
+    }
+    assert {"title", "creator", "date.issued", "language.iso"} <= keys
+    assert {"contributor.advisor", "description.abstract", "rights.license"} <= keys
+
+    r2 = client.post("/api/admin/metadata/ridunt-profile", headers=admin_headers)
+    assert r2.status_code == 200
+    assert r2.json()["field_count"] == data["field_count"]
+
+    # Los tipos sin seleccion propia heredan el perfil, para que la carga y la
+    # revision muestren los campos sin configurar cada tipo documental.
+    types = client.get("/api/admin/document-types", headers=admin_headers).json()
+    assert types
+    for doc_type in types:
+        if not doc_type["active"]:
+            continue
+        detail = client.get(
+            f"/api/admin/document-types/{doc_type['id']}", headers=admin_headers
+        ).json()
+        assert detail["fields"], f"{doc_type['code']} quedo sin campos"
+        assert any(f["element"] == "title" for f in detail["fields"])
+        assert any(f["element"] == "contributor" for f in detail["fields"])
+
 
 def test_crear_esquema_y_listar(client, admin_headers):
     r = client.post(

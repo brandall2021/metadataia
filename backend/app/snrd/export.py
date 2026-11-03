@@ -12,9 +12,11 @@ DC_ALIASES = {
 
 
 def dc_key(element: str, qualifier: str | None = None) -> str:
-    if element in DC_ALIASES:
-        return DC_ALIASES[element]
-    return ""
+    if not element:
+        return ""
+    if qualifier:
+        return f"dc.{element}.{qualifier}"
+    return DC_ALIASES.get(element, f"dc.{element}")
 
 
 def dc_fields(records, identifier: str | None = None) -> dict:

@@ -175,7 +175,14 @@ def _validate(
         by_key.setdefault(_field_key(field), []).append(rec)
 
     def values(element: str) -> list:
-        return [r for r in by_key.get(element, []) if str(r.value or "").strip()]
+        # El perfil RIDUNT usa claves cualificadas (date.issued, language.iso,
+        # rights.license). Las reglas SNRD se expresan por elemento base.
+        aliases = {"date": ("date.issued",), "language": ("language.iso",)}
+        candidates = [element, *aliases.get(element, ())]
+        if element == "rights":
+            candidates.extend(k for k in by_key if k.startswith("rights."))
+        records = [rec for key in dict.fromkeys(candidates) for rec in by_key.get(key, [])]
+        return [r for r in records if str(r.value or "").strip()]
 
     if not any(by_key.values()):
         errors.append(

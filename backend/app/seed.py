@@ -16,8 +16,6 @@ from app.models import (
     AIModel,
     AIProvider,
     DocumentType,
-    MetadataField,
-    MetadataSchema,
     Permission,
     Repository,
     RepositoryCollection,
@@ -37,10 +35,6 @@ RIDUNT_REPOSITORY_CREDENTIAL_ENV = "RIDUNT_REPOSITORY_CREDENTIAL"
 RIDUNT_REPOSITORY_AUTH_TYPE = "basic"
 RIDUNT_COLLECTION_HANDLE = "123456789/1732"
 RIDUNT_SYNC_COMMUNITY_UUID = "9bed1cdd-b1c6-4be9-90ec-435bcba374ac"
-
-RIDUNT_SCHEMA_CODE = "snrd-dc"
-RIDUNT_SCHEMA_NAME = "RIDUNT / SNRD Dublin Core"
-RIDUNT_SCHEMA_NAMESPACE = "dc"
 
 RIDUNT_VOCABULARIES = [
     {
@@ -131,151 +125,6 @@ RIDUNT_DOCUMENT_TYPES = [
     {"code": "video", "name": "Video", "description": "Archivos y materiales audiovisuales."},
 ]
 
-RIDUNT_FIELD_VOCABULARIES = {
-    "subject": "unesco-thesaurus",
-    "language": "ridunt-language",
-    "type": "ridunt-type",
-    "rights": "ridunt-rights",
-}
-
-RIDUNT_FIELDS = [
-    {
-        "element": "title",
-        "display_name": "Titulo",
-        "description": "Titulo principal del recurso",
-        "required": True,
-        "repeatable": False,
-        "data_type": "text",
-        "order_index": 0,
-    },
-    {
-        "element": "creator",
-        "display_name": "Autor",
-        "description": "Autor o autores principales",
-        "required": True,
-        "repeatable": True,
-        "data_type": "text",
-        "order_index": 1,
-    },
-    {
-        "element": "contributor",
-        "display_name": "Contribuyente",
-        "description": "Colaboradores, directores y otros aportantes",
-        "required": False,
-        "repeatable": True,
-        "data_type": "text",
-        "order_index": 2,
-    },
-    {
-        "element": "date",
-        "display_name": "Fecha",
-        "description": "Fecha de publicacion o emision",
-        "required": True,
-        "repeatable": False,
-        "data_type": "date",
-        "validation_type": "date",
-        "order_index": 3,
-    },
-    {
-        "element": "type",
-        "display_name": "Tipo documental",
-        "description": "Libro, tesis, articulo, informe u otro tipo documental",
-        "required": True,
-        "repeatable": False,
-        "data_type": "text",
-        "order_index": 4,
-    },
-    {
-        "element": "language",
-        "display_name": "Idioma",
-        "description": "Idioma principal del recurso",
-        "required": True,
-        "repeatable": False,
-        "data_type": "text",
-        "order_index": 5,
-    },
-    {
-        "element": "subject",
-        "display_name": "Tema",
-        "description": "Palabras clave o materias",
-        "required": False,
-        "repeatable": True,
-        "data_type": "text",
-        "order_index": 6,
-    },
-    {
-        "element": "description",
-        "display_name": "Resumen",
-        "description": "Resumen o abstract del recurso",
-        "required": False,
-        "repeatable": False,
-        "data_type": "text",
-        "order_index": 7,
-    },
-    {
-        "element": "publisher",
-        "display_name": "Editorial / institucion",
-        "description": "Institucion o editorial responsable",
-        "required": False,
-        "repeatable": False,
-        "data_type": "text",
-        "order_index": 8,
-    },
-    {
-        "element": "identifier",
-        "display_name": "Identificador",
-        "description": "DOI, URL, handle u otro identificador",
-        "required": False,
-        "repeatable": True,
-        "data_type": "text",
-        "order_index": 9,
-    },
-    {
-        "element": "source",
-        "display_name": "Fuente",
-        "description": "Coleccion, serie o fuente original",
-        "required": False,
-        "repeatable": False,
-        "data_type": "text",
-        "order_index": 10,
-    },
-    {
-        "element": "relation",
-        "display_name": "Relacion",
-        "description": "Relacion con otros recursos",
-        "required": False,
-        "repeatable": True,
-        "data_type": "text",
-        "order_index": 11,
-    },
-    {
-        "element": "coverage",
-        "display_name": "Cobertura",
-        "description": "Cobertura temporal o espacial",
-        "required": False,
-        "repeatable": True,
-        "data_type": "text",
-        "order_index": 12,
-    },
-    {
-        "element": "format",
-        "display_name": "Formato",
-        "description": "Formato fisico o digital del recurso",
-        "required": False,
-        "repeatable": True,
-        "data_type": "text",
-        "order_index": 13,
-    },
-    {
-        "element": "rights",
-        "display_name": "Derechos",
-        "description": "Licencia, acceso o restricciones de uso",
-        "required": False,
-        "repeatable": False,
-        "data_type": "text",
-        "order_index": 14,
-    },
-]
 
 RIDUNT_AGENT_SYSTEM_PROMPT = (
     "Eres un catalogador experto en RIDUNT y SNRD. Extraes metadatos de documentos "
@@ -324,50 +173,6 @@ Reglas:
 - Si la fecha no puede normalizarse a ISO, devuelve el valor exacto que aparece.
 - Si no hay evidencia suficiente, omite el campo.
 """
-
-
-def _upsert_ridunt_metadata(db: Session) -> None:
-    schema = db.query(MetadataSchema).filter_by(code=RIDUNT_SCHEMA_CODE).one_or_none()
-    if schema is None:
-        schema = MetadataSchema(
-            name=RIDUNT_SCHEMA_NAME,
-            code=RIDUNT_SCHEMA_CODE,
-            namespace=RIDUNT_SCHEMA_NAMESPACE,
-            description="Perfil RIDUNT basado en Dublin Core y SNRD.",
-            active=True,
-        )
-        db.add(schema)
-        db.flush()
-    else:
-        schema.name = RIDUNT_SCHEMA_NAME
-        schema.namespace = RIDUNT_SCHEMA_NAMESPACE
-        schema.description = "Perfil RIDUNT basado en Dublin Core y SNRD."
-        schema.active = True
-
-    for field_data in RIDUNT_FIELDS:
-        field = (
-            db.query(MetadataField)
-            .filter_by(schema_id=schema.id, element=field_data["element"], qualifier=None)
-            .one_or_none()
-        )
-        if field is None:
-            field = MetadataField(schema_id=schema.id, element=field_data["element"])
-            db.add(field)
-            db.flush()
-        field.display_name = field_data["display_name"]
-        field.description = field_data["description"]
-        field.data_type = field_data.get("data_type", "text")
-        field.required = field_data.get("required", False)
-        field.repeatable = field_data.get("repeatable", False)
-        field.editable = True
-        field.ai_extractable = True
-        field.validation_type = field_data.get("validation_type")
-        field.normalization_type = field_data.get("normalization_type")
-        field.order_index = field_data.get("order_index")
-        if field_data["element"] in RIDUNT_FIELD_VOCABULARIES:
-            vocab = db.query(Vocabulary).filter_by(code=RIDUNT_FIELD_VOCABULARIES[field_data["element"]]).one_or_none()
-            field.vocabulary_id = vocab.id if vocab else None
-        field.active = True
 
 
 def _upsert_ridunt_repository(db: Session) -> None:
@@ -672,11 +477,13 @@ USERS = [
 
 
 def run(db: Session) -> None:
+    from app.metadata.ridunt_profile import sync_ridunt_profile
+
     _upsert_ridunt_repository(db)
     _upsert_ridunt_collection(db)
     _upsert_ridunt_vocabularies(db)
     _upsert_ridunt_document_types(db)
-    _upsert_ridunt_metadata(db)
+    sync_ridunt_profile(db)
     _upsert_ridunt_ai_seed(db)
 
     # Permisos

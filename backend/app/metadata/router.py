@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import require_permission
+from app.metadata.ridunt_profile import sync_ridunt_profile
 from app.metadata.schemas import (
     DocumentTypeCreate,
     DocumentTypeFieldLink,
@@ -217,6 +218,15 @@ def _type_out(type_: DocumentType, with_fields: bool = True) -> DocumentTypeOut:
 @router.get("/admin/metadata/schemas", response_model=list[SchemaOut])
 def list_schemas(db: Session = Depends(get_db), _: None = Depends(admin_metadata)):
     return [_schema_out(s) for s in db.query(MetadataSchema).order_by(MetadataSchema.name)]
+
+
+@router.post("/admin/metadata/ridunt-profile", response_model=SchemaOut)
+def apply_ridunt_profile(
+    db: Session = Depends(get_db),
+    _: None = Depends(admin_metadata),
+):
+    """Crea o actualiza el esquema RIDUNT/SNRD con los campos de las fichas RIDUNT."""
+    return _schema_out(sync_ridunt_profile(db))
 
 
 @router.post("/admin/metadata/schemas", response_model=SchemaOut, status_code=201)
