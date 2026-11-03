@@ -5,6 +5,15 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
+PROVIDER_TYPES = {
+    "openai",
+    "openai-compatible",
+    "ollama",
+    "anthropic",
+    "google",
+    "azure-openai",
+}
+
 
 # --- Proveedores -----------------------------------------------------------
 
@@ -23,6 +32,13 @@ class ProviderCreate(BaseModel):
     def strip_blank(cls, value):
         return value.strip() if isinstance(value, str) else value
 
+    @field_validator("type")
+    @classmethod
+    def supported_type(cls, value: str) -> str:
+        if value not in PROVIDER_TYPES:
+            raise ValueError(f"Tipo de proveedor no soportado: {value}")
+        return value
+
 
 class ProviderUpdate(BaseModel):
     name: str | None = None
@@ -37,6 +53,13 @@ class ProviderUpdate(BaseModel):
     @classmethod
     def strip_blank(cls, value):
         return value.strip() if isinstance(value, str) else value
+
+    @field_validator("type")
+    @classmethod
+    def supported_type(cls, value: str | None) -> str | None:
+        if value is not None and value not in PROVIDER_TYPES:
+            raise ValueError(f"Tipo de proveedor no soportado: {value}")
+        return value
 
 
 class ProviderOut(BaseModel):
@@ -201,3 +224,41 @@ class AgentOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     current_version: AgentVersionOut | None = None
+
+
+# --- Descubrimiento e importacion de modelos --------------------------------
+
+
+class DiscoveredModel(BaseModel):
+    id: str
+    owned_by: str | None = None
+    created: int | None = None
+
+
+class ProviderModelsOut(BaseModel):
+    ok: bool
+    message: str
+    models: list[DiscoveredModel] = Field(default_factory=list)
+    detail: str | None = None
+
+
+class ModelImportItem(BaseModel):
+    model_identifier: str = Field(min_length=1)
+    name: str | None = None
+    context_window: int | None = Field(default=None, ge=1)
+    supports_json: bool = False
+    supports_vision: bool = False
+
+    @field_validator("model_identifier", "name")
+    @classmethod
+    def strip_blank(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
+class ModelImportRequest(BaseModel):
+    models: list[ModelImportItem] = Field(min_length=1)
+
+
+class ModelImportOut(BaseModel):
+    created: list[ModelOut]
+    skipped: list[str] = Field(default_factory=list)

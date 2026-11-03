@@ -15,9 +15,12 @@ from app.ai.schemas import (
     AgentVersionCreate,
     AgentVersionOut,
     ModelCreate,
+    ModelImportOut,
+    ModelImportRequest,
     ModelOut,
     ModelUpdate,
     ProviderCreate,
+    ProviderModelsOut,
     ProviderOut,
     ProviderUpdate,
     TestResult,
@@ -59,6 +62,10 @@ def _get_provider(db: Session, provider_id: str | uuid.UUID) -> AIProvider:
     if provider is None:
         raise HTTPException(status_code=404, detail="Proveedor no encontrado")
     return provider
+
+
+def _provider_configuration(provider: AIProvider) -> dict:
+    return provider.configuration_json or {}
 
 
 def _model_out(model: AIModel) -> ModelOut:
@@ -185,7 +192,78 @@ def test_provider_connection(
     provider = _get_provider(db, provider_id)
     api_key = decrypt_secret(provider.api_key_encrypted)
     return TestResult(
-        **ai_client.test_provider(provider.base_url, api_key, provider.type)
+        **ai_client.test_provider(
+            provider.base_url,
+            api_key,
+            provider.type,
+            _provider_configuration(provider),
+        )
+    )
+
+
+@router.get("/providers/{provider_id}/available-models", response_model=ProviderModelsOut)
+def list_provider_available_models(
+    provider_id: str,
+    _: AIProvider = Depends(admin_providers),
+    db: Session = Depends(get_db),
+):
+    """Consulta al proveedor su catalogo real de modelos (GET /models)."""
+    provider = _get_provider(db, provider_id)
+    api_key = decrypt_secret(provider.api_key_encrypted)
+    return ProviderModelsOut(
+        **ai_client.discover_models(
+            provider.base_url,
+            api_key,
+            provider.type,
+            _provider_configuration(provider),
+        )
+    )
+
+
+@router.post(
+    "/providers/{provider_id}/models/import",
+    response_model=ModelImportOut,
+    status_code=201,
+)
+def import_provider_models(
+    provider_id: str,
+    body: ModelImportRequest,
+    _: AIModel = Depends(admin_models),
+    db: Session = Depends(get_db),
+):
+    """Crea en lote los modelos indicados, omitiendo los ya registrados."""
+    provider = _get_provider(db, provider_id)
+    existing = {
+        identifier
+        for (identifier,) in db.query(AIModel.model_identifier).filter(
+            AIModel.provider_id == provider.id
+        )
+    }
+    created: list[AIModel] = []
+    skipped: list[str] = []
+    for item in body.models:
+        identifier = item.model_identifier.strip()
+        if not identifier or identifier in existing:
+            skipped.append(identifier or "")
+            continue
+        existing.add(identifier)
+        model = AIModel(
+            provider_id=provider.id,
+            name=(item.name or identifier).strip(),
+            model_identifier=identifier,
+            context_window=item.context_window,
+            supports_json=item.supports_json,
+            supports_vision=item.supports_vision,
+            active=True,
+        )
+        db.add(model)
+        created.append(model)
+    db.commit()
+    for model in created:
+        db.refresh(model)
+    return ModelImportOut(
+        created=[_model_out(model) for model in created],
+        skipped=skipped,
     )
 
 
@@ -290,6 +368,7 @@ def test_model_call(
             model.model_identifier,
             provider.type,
             max_tokens=model.max_tokens_default,
+            configuration=_provider_configuration(provider),
         )
     )
 
@@ -593,5 +672,6 @@ def test_agent(
             version.system_prompt,
             version.extraction_prompt,
             max_tokens=version.max_tokens,
+            configuration=_provider_configuration(provider),
         )
     )

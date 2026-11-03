@@ -437,3 +437,88 @@ def test_probar_modelo_error_controlado(client, admin_headers):
 def json_loads(content: bytes) -> dict:
     import json
     return json.loads(content)
+
+
+# --- proveedores: descubrimiento e importacion de modelos -------------------
+
+
+def test_tipo_proveedor_no_soportado_422(client, admin_headers):
+    r = client.post(
+        "/api/admin/ai/providers",
+        json={"name": "Raro", "code": "prov-raro", "type": "inexistente"},
+        headers=admin_headers,
+    )
+    assert r.status_code == 422
+
+
+def test_descubrir_modelos_del_proveedor(client, admin_headers, monkeypatch):
+    calls = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["url"] = str(request.url)
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"id": "gpt-4o-mini", "owned_by": "openai"},
+                    {"id": "gpt-4o", "owned_by": "openai"},
+                ]
+            },
+        )
+
+    _mock_http(monkeypatch, handler)
+
+    db = SessionLocal()
+    try:
+        provider = _make_provider(db, TEMP_PROVIDER_CODE, base_url="https://fake.test/v1")
+        try:
+            r = client.get(
+                f"/api/admin/ai/providers/{provider.id}/available-models",
+                headers=admin_headers,
+            )
+            assert r.status_code == 200, r.text
+            data = r.json()
+            assert calls["url"] == "https://fake.test/v1/models"
+            assert data["ok"] is True
+            assert [m["id"] for m in data["models"]] == ["gpt-4o", "gpt-4o-mini"]
+        finally:
+            _delete_provider(provider.id)
+    finally:
+        db.close()
+
+
+def test_importar_modelos_omite_duplicados(client, admin_headers):
+    db = SessionLocal()
+    try:
+        provider = _make_provider(db, TEMP_PROVIDER_CODE)
+        existing = _make_model(db, provider.id)
+        try:
+            r = client.post(
+                f"/api/admin/ai/providers/{provider.id}/models/import",
+                json={
+                    "models": [
+                        {"model_identifier": existing.model_identifier},
+                        {"model_identifier": "gpt-4o", "name": "GPT-4o", "supports_vision": True},
+                        {"model_identifier": "gpt-4o"},
+                    ]
+                },
+                headers=admin_headers,
+            )
+            assert r.status_code == 201, r.text
+            data = r.json()
+            assert [m["model_identifier"] for m in data["created"]] == ["gpt-4o"]
+            assert data["created"][0]["supports_vision"] is True
+            assert data["skipped"] == ["gpt-test", "gpt-4o"]
+
+            imported = (
+                db.query(AIModel)
+                .filter_by(provider_id=provider.id, model_identifier="gpt-4o")
+                .all()
+            )
+            assert len(imported) == 1
+        finally:
+            db.query(AIModel).filter_by(provider_id=provider.id).delete()
+            db.commit()
+            _delete_provider(provider.id)
+    finally:
+        db.close()

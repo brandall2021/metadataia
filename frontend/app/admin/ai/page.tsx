@@ -1,8 +1,26 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { Bot, Cpu, Database, KeyRound, Layers3, Plus, Power, Save, Sparkles, Trash2, type LucideIcon } from "lucide-react";
+import {
+  Bot,
+  Check,
+  Cpu,
+  Database,
+  Download,
+  ExternalLink,
+  KeyRound,
+  Layers3,
+  Pencil,
+  Plus,
+  Power,
+  RefreshCw,
+  Save,
+  Sparkles,
+  Trash2,
+  type LucideIcon,
+} from "lucide-react";
 
+import { ProviderCatalog } from "@/components/admin/provider-catalog";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,6 +29,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  PROVIDER_CATALOG,
+  PROVIDER_TYPE_OPTIONS,
+  nextAvailableCode,
+  presetByCode,
+  providerTypeLabel,
+  type ProviderPreset,
+  type SuggestedModel,
+} from "@/lib/ai-providers";
 import { apiFetch } from "@/lib/api";
 
 type Model = {
@@ -60,7 +87,17 @@ type Provider = {
   base_url: string | null;
   active: boolean;
   api_key_masked: string;
+  configuration_json: Record<string, unknown> | null;
 };
+
+type DiscoveredModel = { id: string; owned_by?: string | null; created?: number | null };
+type Discovery = {
+  ok: boolean;
+  message: string;
+  models: DiscoveredModel[];
+  detail?: string | null;
+};
+type ImportResult = { created: Model[]; skipped: string[] };
 
 const inputCls =
   "w-full rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus:border-ring focus:bg-muted/50 focus:ring-2 focus:ring-ring/30";
@@ -205,7 +242,14 @@ export default function AIPage() {
     type: "openai",
     base_url: "",
     api_key: "",
+    api_version: "2024-10-21",
   });
+  const [selectedPresetCode, setSelectedPresetCode] = useState<string | null>(null);
+  const [suggestedSelection, setSuggestedSelection] = useState<string[]>([]);
+  const [discoveries, setDiscoveries] = useState<Record<string, Discovery>>({});
+  const [importBusy, setImportBusy] = useState<Record<string, boolean>>({});
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
+  const [providerDraft, setProviderDraft] = useState({ name: "", base_url: "", type: "openai" });
   const [modelForm, setModelForm] = useState({
     provider_id: "",
     name: "",
@@ -243,6 +287,17 @@ export default function AIPage() {
   const activeAgents = agents.filter((agent) => agent.active).length;
   const selectedModel = selectedModelId ? models.find((model) => model.id === selectedModelId) ?? null : null;
   const selectedAgent = selectedAgentId ? agents.find((agent) => agent.id === selectedAgentId) ?? null : null;
+  const selectedPreset = presetByCode(selectedPresetCode);
+  const connectedCodes = new Set(providers.map((provider) => provider.code));
+  const selectedProvider = providers.find((provider) => provider.id === modelForm.provider_id);
+  const modelSuggestions = (presetByCode(selectedProvider?.code)?.models ?? []).filter(
+    (suggestion) =>
+      !models.some(
+        (model) =>
+          model.provider_id === selectedProvider?.id &&
+          model.model_identifier === suggestion.modelIdentifier,
+      ),
+  );
 
   async function load() {
     try {
@@ -379,12 +434,46 @@ export default function AIPage() {
     }
   }
 
+  function applyPreset(preset: ProviderPreset) {
+    setSelectedPresetCode(preset.code);
+    setProviderForm({
+      name: preset.name,
+      code: nextAvailableCode(preset.code, connectedCodes),
+      type: preset.type,
+      base_url: preset.baseUrl,
+      api_key: "",
+      api_version:
+        typeof preset.configuration?.api_version === "string"
+          ? preset.configuration.api_version
+          : "2024-10-21",
+    });
+    setSuggestedSelection(preset.models.map((model) => model.modelIdentifier));
+    setProviderResults((results) => ({ ...results, create: "" }));
+  }
+
+  function importPayload(items: SuggestedModel[]) {
+    return items.map((item) => ({
+      model_identifier: item.modelIdentifier,
+      name: item.name,
+      context_window: item.contextWindow ?? null,
+      supports_json: item.supportsJson ?? false,
+      supports_vision: item.supportsVision ?? false,
+    }));
+  }
+
   async function handleCreateProvider(e: FormEvent) {
     e.preventDefault();
     setProviderBusy((b) => ({ ...b, create: true }));
     setError(null);
     try {
-      await apiFetch<Provider>("/api/admin/ai/providers", {
+      const configuration =
+        providerForm.type === "azure-openai"
+          ? {
+              ...(selectedPreset?.configuration ?? {}),
+              api_version: providerForm.api_version.trim() || "2024-10-21",
+            }
+          : (selectedPreset?.configuration ?? null);
+      const created = await apiFetch<Provider>("/api/admin/ai/providers", {
         method: "POST",
         body: JSON.stringify({
           name: providerForm.name.trim(),
@@ -392,15 +481,179 @@ export default function AIPage() {
           type: providerForm.type,
           base_url: providerForm.base_url.trim() || null,
           api_key: providerForm.api_key.trim() || undefined,
+          configuration_json: configuration,
         }),
       });
-      setProviderForm({ name: "", code: "", type: "openai", base_url: "", api_key: "" });
+      const chosen = selectedPreset
+        ? selectedPreset.models.filter((model) => suggestedSelection.includes(model.modelIdentifier))
+        : [];
+      let notice = "Proveedor creado.";
+      if (chosen.length > 0) {
+        try {
+          const imported = await apiFetch<ImportResult>(
+            `/api/admin/ai/providers/${created.id}/models/import`,
+            { method: "POST", body: JSON.stringify({ models: importPayload(chosen) }) },
+          );
+          notice = `Proveedor creado con ${imported.created.length} modelo(s)${
+            imported.skipped.length ? ` · ${imported.skipped.length} ya existían` : ""
+          }.`;
+        } catch (importErr) {
+          notice = `Proveedor creado, pero falló la importación de modelos: ${
+            importErr instanceof Error ? importErr.message : "error desconocido"
+          }`;
+        }
+      }
+      setProviderResults((results) => ({ ...results, create: notice }));
+      setProviderForm({
+        name: "",
+        code: "",
+        type: "openai",
+        base_url: "",
+        api_key: "",
+        api_version: "2024-10-21",
+      });
+      setSelectedPresetCode(null);
+      setSuggestedSelection([]);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al crear proveedor");
+      setProviderResults((results) => ({
+        ...results,
+        create: err instanceof Error ? err.message : "Error al crear proveedor",
+      }));
     } finally {
       setProviderBusy((b) => ({ ...b, create: false }));
     }
+  }
+
+  async function importSuggested(provider: Provider) {
+    const preset = presetByCode(provider.code);
+    if (!preset || preset.models.length === 0) {
+      setProviderResults((results) => ({
+        ...results,
+        [provider.id]: "Este proveedor no tiene modelos sugeridos: detectá los disponibles o cargalos manualmente.",
+      }));
+      return;
+    }
+    setImportBusy((b) => ({ ...b, [provider.id]: true }));
+    setError(null);
+    try {
+      const imported = await apiFetch<ImportResult>(
+        `/api/admin/ai/providers/${provider.id}/models/import`,
+        { method: "POST", body: JSON.stringify({ models: importPayload(preset.models) }) },
+      );
+      setProviderResults((results) => ({
+        ...results,
+        [provider.id]: `${imported.created.length} modelos agregados${
+          imported.skipped.length ? ` · ${imported.skipped.length} ya existían` : ""
+        }.`,
+      }));
+      await load();
+    } catch (err) {
+      setProviderResults((results) => ({
+        ...results,
+        [provider.id]: err instanceof Error ? err.message : "Error al importar modelos",
+      }));
+    } finally {
+      setImportBusy((b) => ({ ...b, [provider.id]: false }));
+    }
+  }
+
+  async function discoverModels(provider: Provider) {
+    setImportBusy((b) => ({ ...b, [provider.id]: true }));
+    setError(null);
+    try {
+      const result = await apiFetch<Discovery>(
+        `/api/admin/ai/providers/${provider.id}/available-models`,
+      );
+      setDiscoveries((items) => ({ ...items, [provider.id]: result }));
+      if (!result.ok) {
+        setProviderResults((results) => ({ ...results, [provider.id]: result.message }));
+      }
+    } catch (err) {
+      setProviderResults((results) => ({
+        ...results,
+        [provider.id]: err instanceof Error ? err.message : "Error al detectar modelos",
+      }));
+    } finally {
+      setImportBusy((b) => ({ ...b, [provider.id]: false }));
+    }
+  }
+
+  async function importDiscovered(provider: Provider) {
+    const found = discoveries[provider.id]?.models ?? [];
+    if (found.length === 0) return;
+    setImportBusy((b) => ({ ...b, [provider.id]: true }));
+    setError(null);
+    try {
+      const imported = await apiFetch<ImportResult>(
+        `/api/admin/ai/providers/${provider.id}/models/import`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            models: found.map((model) => ({ model_identifier: model.id, name: model.id })),
+          }),
+        },
+      );
+      setProviderResults((results) => ({
+        ...results,
+        [provider.id]: `${imported.created.length} modelos importados${
+          imported.skipped.length ? ` · ${imported.skipped.length} ya existían` : ""
+        }.`,
+      }));
+      await load();
+    } catch (err) {
+      setProviderResults((results) => ({
+        ...results,
+        [provider.id]: err instanceof Error ? err.message : "Error al importar modelos",
+      }));
+    } finally {
+      setImportBusy((b) => ({ ...b, [provider.id]: false }));
+    }
+  }
+
+  function startEditProvider(provider: Provider) {
+    setEditingProviderId(provider.id);
+    setProviderDraft({
+      name: provider.name,
+      base_url: provider.base_url ?? "",
+      type: provider.type,
+    });
+  }
+
+  async function saveProviderDetails(provider: Provider) {
+    setProviderBusy((b) => ({ ...b, [provider.id]: true }));
+    setError(null);
+    try {
+      await apiFetch<Provider>(`/api/admin/ai/providers/${provider.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          name: providerDraft.name.trim(),
+          type: providerDraft.type,
+          base_url: providerDraft.base_url.trim() || null,
+        }),
+      });
+      setEditingProviderId(null);
+      setProviderResults((results) => ({ ...results, [provider.id]: "Proveedor actualizado." }));
+      await load();
+    } catch (err) {
+      setProviderResults((results) => ({
+        ...results,
+        [provider.id]: err instanceof Error ? err.message : "Error al actualizar",
+      }));
+    } finally {
+      setProviderBusy((b) => ({ ...b, [provider.id]: false }));
+    }
+  }
+
+  function applyModelSuggestion(suggestion: SuggestedModel) {
+    setModelForm((prev) => ({
+      ...prev,
+      name: suggestion.name,
+      model_identifier: suggestion.modelIdentifier,
+      context_window: suggestion.contextWindow?.toString() ?? "",
+      supports_json: suggestion.supportsJson ?? false,
+      supports_vision: suggestion.supportsVision ?? false,
+    }));
   }
 
   function selectModel(model: Model) {
@@ -708,51 +961,103 @@ export default function AIPage() {
             Proveedores de IA
           </CardTitle>
           <CardDescription>
-            Conectá proveedores (OpenAI, Anthropic, Ollama…) y cargá la API key que usan sus modelos.
+            Elegí un proveedor del catálogo o configurá uno compatible: la URL, el tipo de API y los
+            modelos sugeridos se completan solos. Después cargá la API key y probá la conexión.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent className="space-y-6 p-6">
+          <ProviderCatalog
+            presets={PROVIDER_CATALOG}
+            connectedCodes={connectedCodes}
+            selectedCode={selectedPresetCode}
+            onSelect={applyPreset}
+          />
+
           <div className="grid gap-6 xl:grid-cols-[minmax(360px,0.96fr)_1.04fr]">
             <div className="space-y-3">
-              <h3 className="text-sm font-medium">Nuevo proveedor</h3>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-medium">
+                  {selectedPreset ? `Conectar ${selectedPreset.name}` : "Proveedor personalizado"}
+                </h3>
+                {selectedPreset && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setSelectedPresetCode(null)}
+                  >
+                    Quitar selección
+                  </Button>
+                )}
+              </div>
+              {selectedPreset && (
+                <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                  <p className="text-xs leading-5 text-muted-foreground">{selectedPreset.description}</p>
+                  <div className="mt-2 flex flex-wrap gap-3 text-xs">
+                    <a
+                      href={selectedPreset.docsUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-primary hover:underline"
+                    >
+                      Documentación
+                      <ExternalLink className="size-3" />
+                    </a>
+                    {selectedPreset.keysUrl && (
+                      <a
+                        href={selectedPreset.keysUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-primary hover:underline"
+                      >
+                        Obtener API key
+                        <ExternalLink className="size-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
               <form onSubmit={handleCreateProvider} className="flex flex-col gap-3 text-sm">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                      Nombre
+                    </span>
+                    <input
+                      className={inputCls}
+                      value={providerForm.name}
+                      onChange={(e) => setProviderForm({ ...providerForm, name: e.target.value })}
+                      placeholder="OpenAI"
+                      required
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                      Código
+                    </span>
+                    <input
+                      className={inputCls}
+                      value={providerForm.code}
+                      onChange={(e) => setProviderForm({ ...providerForm, code: e.target.value })}
+                      placeholder="openai"
+                      required
+                    />
+                  </label>
+                </div>
                 <label className="flex flex-col gap-1.5">
                   <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                    Nombre
-                  </span>
-                  <input
-                    className={inputCls}
-                    value={providerForm.name}
-                    onChange={(e) => setProviderForm({ ...providerForm, name: e.target.value })}
-                    placeholder="OpenAI"
-                    required
-                  />
-                </label>
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                    Código
-                  </span>
-                  <input
-                    className={inputCls}
-                    value={providerForm.code}
-                    onChange={(e) => setProviderForm({ ...providerForm, code: e.target.value })}
-                    placeholder="openai"
-                    required
-                  />
-                </label>
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                    Tipo
+                    Tipo de API
                   </span>
                   <select
                     className={inputCls}
                     value={providerForm.type}
                     onChange={(e) => setProviderForm({ ...providerForm, type: e.target.value })}
                   >
-                    <option value="openai">openai</option>
-                    <option value="openai-compatible">openai-compatible</option>
-                    <option value="ollama">ollama</option>
-                    <option value="anthropic">anthropic</option>
+                    {PROVIDER_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label className="flex flex-col gap-1.5">
@@ -763,9 +1068,27 @@ export default function AIPage() {
                     className={inputCls}
                     value={providerForm.base_url}
                     onChange={(e) => setProviderForm({ ...providerForm, base_url: e.target.value })}
-                    placeholder="https://api.openai.com/v1 (opcional, según tipo)"
+                    placeholder="https://api.proveedor.com/v1"
                   />
                 </label>
+                {providerForm.type === "azure-openai" && (
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                      API version
+                    </span>
+                    <input
+                      className={inputCls}
+                      value={providerForm.api_version}
+                      onChange={(e) =>
+                        setProviderForm({ ...providerForm, api_version: e.target.value })
+                      }
+                      placeholder="2024-10-21"
+                    />
+                    <span className="text-[11px] text-muted-foreground">
+                      La Base URL debe incluir <span className="font-mono">/openai/deployments/&lt;deployment&gt;</span>.
+                    </span>
+                  </label>
+                )}
                 <label className="flex flex-col gap-1.5">
                   <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
                     API key
@@ -775,89 +1098,315 @@ export default function AIPage() {
                     className={inputCls}
                     value={providerForm.api_key}
                     onChange={(e) => setProviderForm({ ...providerForm, api_key: e.target.value })}
-                    placeholder="sk-… (opcional al crear)"
+                    placeholder={
+                      selectedPreset && !selectedPreset.requiresKey
+                        ? "No requerida para este proveedor"
+                        : "sk-… (podés cargarla después)"
+                    }
                   />
                 </label>
+                {selectedPreset && selectedPreset.models.length > 0 && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        Modelos a importar ({suggestedSelection.length}/{selectedPreset.models.length})
+                      </span>
+                      <button
+                        type="button"
+                        className="text-xs text-primary hover:underline"
+                        onClick={() =>
+                          setSuggestedSelection(
+                            suggestedSelection.length === selectedPreset.models.length
+                              ? []
+                              : selectedPreset.models.map((model) => model.modelIdentifier),
+                          )
+                        }
+                      >
+                        {suggestedSelection.length === selectedPreset.models.length ? "Ninguno" : "Todos"}
+                      </button>
+                    </div>
+                    <div className="mt-2 grid gap-1.5">
+                      {selectedPreset.models.map((model) => (
+                        <label
+                          key={model.modelIdentifier}
+                          className="flex items-start gap-2 text-xs text-muted-foreground"
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={suggestedSelection.includes(model.modelIdentifier)}
+                            onChange={(event) =>
+                              setSuggestedSelection((prev) =>
+                                event.target.checked
+                                  ? [...prev, model.modelIdentifier]
+                                  : prev.filter((item) => item !== model.modelIdentifier),
+                              )
+                            }
+                          />
+                          <span>
+                            <span className="font-medium text-foreground">{model.name}</span>
+                            {" · "}
+                            <span className="font-mono">{model.modelIdentifier}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      Se crean junto con el proveedor. También podés detectarlos o agregarlos después.
+                    </p>
+                  </div>
+                )}
                 <Button type="submit" disabled={providerBusy.create} className="mt-1">
-                  {providerBusy.create ? "Creando…" : "Crear proveedor"}
+                  {providerBusy.create
+                    ? "Creando…"
+                    : selectedPreset
+                      ? `Conectar ${selectedPreset.name}`
+                      : "Crear proveedor"}
                 </Button>
+                {providerResults.create && (
+                  <p
+                    className={`text-xs ${
+                      providerResults.create.toLowerCase().includes("creado")
+                        ? "text-emerald-600"
+                        : "text-destructive"
+                    }`}
+                  >
+                    {providerResults.create}
+                  </p>
+                )}
               </form>
             </div>
 
             <div className="space-y-4">
               <h3 className="text-sm font-medium">Cargados ({providers.length})</h3>
               {providers.length > 0 ? (
-                providers.map((p) => (
-                  <div key={p.id} className="rounded-2xl border border-border/70 bg-background/70 p-4 shadow-sm transition-colors hover:border-primary/25 hover:bg-muted/20">
-                    <div className="flex flex-col gap-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium leading-none">{p.name}</p>
-                            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                              {p.type}
-                            </span>
-                            <StatusBadge active={p.active} onClick={() => toggleProvider(p)} />
+                providers.map((p) => {
+                  const preset = presetByCode(p.code);
+                  const modelCount = models.filter((model) => model.provider_id === p.id).length;
+                  const discovery = discoveries[p.id];
+                  const editing = editingProviderId === p.id;
+                  const result = providerResults[p.id] ?? "";
+                  const resultOk =
+                    result.startsWith("OK") || /importados|agregados|actualizado|guardada/i.test(result);
+                  return (
+                    <div key={p.id} className="rounded-2xl border border-border/70 bg-background/70 p-4 shadow-sm transition-colors hover:border-primary/25 hover:bg-muted/20">
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-medium leading-none">{p.name}</p>
+                              <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                                {providerTypeLabel(p.type)}
+                              </span>
+                              <StatusBadge active={p.active} onClick={() => toggleProvider(p)} />
+                            </div>
+                            <p className="mt-2 font-mono text-xs text-muted-foreground">{p.code}</p>
+                            {p.base_url && (
+                              <p className="mt-1 break-all text-xs text-muted-foreground">{p.base_url}</p>
+                            )}
+                            <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                              <span>
+                                {modelCount} modelo{modelCount === 1 ? "" : "s"}
+                              </span>
+                              {preset && (
+                                <a
+                                  href={preset.docsUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 hover:text-primary"
+                                >
+                                  Docs
+                                  <ExternalLink className="size-3" />
+                                </a>
+                              )}
+                              {preset && !preset.requiresKey && (
+                                <span className="inline-flex items-center gap-1 text-emerald-600">
+                                  <Check className="size-3" />
+                                  Sin API key
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <p className="mt-2 font-mono text-xs text-muted-foreground">{p.code}</p>
-                          {p.base_url && <p className="mt-1 text-xs text-muted-foreground">{p.base_url}</p>}
+                          <div className="flex shrink-0 items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              title={p.active ? "Desactivar" : "Activar"}
+                              onClick={() => toggleProvider(p)}
+                            >
+                              <Power />
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="icon-sm"
+                              title="Eliminar"
+                              onClick={() => deleteProvider(p)}
+                            >
+                              <Trash2 />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex shrink-0 items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            title={p.active ? "Desactivar" : "Activar"}
-                            onClick={() => toggleProvider(p)}
-                          >
-                            <Power />
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="icon-sm"
-                            title="Eliminar"
-                            onClick={() => deleteProvider(p)}
-                          >
-                            <Trash2 />
-                          </Button>
-                        </div>
+
+                        {editing ? (
+                          <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <input
+                              className={inputCls}
+                              value={providerDraft.name}
+                              onChange={(e) =>
+                                setProviderDraft({ ...providerDraft, name: e.target.value })
+                              }
+                              placeholder="Nombre"
+                            />
+                            <input
+                              className={inputCls}
+                              value={providerDraft.base_url}
+                              onChange={(e) =>
+                                setProviderDraft({ ...providerDraft, base_url: e.target.value })
+                              }
+                              placeholder="Base URL"
+                            />
+                            <select
+                              className={inputCls}
+                              value={providerDraft.type}
+                              onChange={(e) =>
+                                setProviderDraft({ ...providerDraft, type: e.target.value })
+                              }
+                            >
+                              {PROVIDER_TYPE_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                disabled={providerBusy[p.id]}
+                                onClick={() => void saveProviderDetails(p)}
+                              >
+                                <Save className="size-3.5" />
+                                Guardar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setEditingProviderId(null)}
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                              <label className="flex flex-1 flex-col gap-1">
+                                <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                                  API key {p.api_key_masked ? `(en uso: ${p.api_key_masked})` : "(sin clave)"}
+                                </span>
+                                <input
+                                  type="password"
+                                  className={inputCls}
+                                  placeholder={
+                                    p.api_key_masked
+                                      ? "Nueva clave (vacío = mantener)"
+                                      : preset && !preset.requiresKey
+                                        ? "No requerida"
+                                        : "sk-…"
+                                  }
+                                  value={providerKeys[p.id] ?? ""}
+                                  onChange={(e) =>
+                                    setProviderKeys((k) => ({ ...k, [p.id]: e.target.value }))
+                                  }
+                                />
+                              </label>
+                              <Button size="sm" disabled={providerBusy[p.id]} onClick={() => saveProviderKey(p)}>
+                                Guardar clave
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={providerBusy[p.id]}
+                                onClick={() => testProvider(p)}
+                              >
+                                Probar
+                              </Button>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                disabled={importBusy[p.id]}
+                                onClick={() => void discoverModels(p)}
+                              >
+                                <RefreshCw className="size-3" />
+                                Detectar modelos
+                              </Button>
+                              {preset && preset.models.length > 0 && (
+                                <Button
+                                  size="xs"
+                                  variant="outline"
+                                  disabled={importBusy[p.id]}
+                                  onClick={() => void importSuggested(p)}
+                                >
+                                  <Download className="size-3" />
+                                  Sugeridos ({preset.models.length})
+                                </Button>
+                              )}
+                              <Button size="xs" variant="ghost" onClick={() => startEditProvider(p)}>
+                                <Pencil className="size-3" />
+                                Editar
+                              </Button>
+                            </div>
+                          </>
+                        )}
+
+                        {discovery && (
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs text-muted-foreground">{discovery.message}</p>
+                              {discovery.ok && discovery.models.length > 0 && (
+                                <Button
+                                  size="xs"
+                                  disabled={importBusy[p.id]}
+                                  onClick={() => void importDiscovered(p)}
+                                >
+                                  <Download className="size-3" />
+                                  Importar todos
+                                </Button>
+                              )}
+                            </div>
+                            {discovery.models.length > 0 && (
+                              <div className="mt-2 flex max-h-28 flex-wrap gap-1 overflow-y-auto">
+                                {discovery.models.slice(0, 24).map((model) => (
+                                  <span
+                                    key={model.id}
+                                    className="rounded-full border border-slate-200 bg-white px-2 py-0.5 font-mono text-[10px] text-muted-foreground"
+                                  >
+                                    {model.id}
+                                  </span>
+                                ))}
+                                {discovery.models.length > 24 && (
+                                  <span className="text-[10px] text-muted-foreground">
+                                    +{discovery.models.length - 24}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {result && (
+                          <p className={`text-xs ${resultOk ? "text-emerald-600" : "text-muted-foreground"}`}>
+                            {result}
+                          </p>
+                        )}
                       </div>
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                        <label className="flex flex-1 flex-col gap-1">
-                          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                            API key {p.api_key_masked ? `(en uso: ${p.api_key_masked})` : "(sin clave)"}
-                          </span>
-                          <input
-                            type="password"
-                            className={inputCls}
-                            placeholder={p.api_key_masked ? "Nueva clave (vacío = mantener)" : "sk-…"}
-                            value={providerKeys[p.id] ?? ""}
-                            onChange={(e) => setProviderKeys((k) => ({ ...k, [p.id]: e.target.value }))}
-                          />
-                        </label>
-                        <Button size="sm" disabled={providerBusy[p.id]} onClick={() => saveProviderKey(p)}>
-                          Guardar clave
-                        </Button>
-                        <Button size="sm" variant="outline" disabled={providerBusy[p.id]} onClick={() => testProvider(p)}>
-                          Probar conexión
-                        </Button>
-                      </div>
-                      {providerResults[p.id] && (
-                        <p
-                          className={`text-xs ${
-                            providerResults[p.id].startsWith("OK") || providerResults[p.id] === "Clave guardada."
-                              ? "text-emerald-600"
-                              : "text-muted-foreground"
-                          }`}
-                        >
-                          {providerResults[p.id]}
-                        </p>
-                      )}
                     </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <p className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
-                  Sin proveedores todavía. Creá el primero con el formulario.
+                  Sin proveedores todavía. Elegí uno del catálogo para conectarlo.
                 </p>
               )}
             </div>
@@ -1070,6 +1619,30 @@ export default function AIPage() {
                       ))}
                     </select>
                   </label>
+                  {!selectedModelId && modelSuggestions.length > 0 && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        Sugerencias de {selectedProvider?.name}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {modelSuggestions.map((suggestion) => (
+                          <button
+                            key={suggestion.modelIdentifier}
+                            type="button"
+                            onClick={() => applyModelSuggestion(suggestion)}
+                            className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary"
+                          >
+                            {suggestion.name}
+                            {suggestion.contextWindow ? ` · ${Math.round(suggestion.contextWindow / 1000)}k` : ""}
+                            {suggestion.supportsVision ? " · visión" : ""}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        Completan identificador, contexto y capacidades del modelo.
+                      </p>
+                    </div>
+                  )}
                   <label className="flex flex-col gap-1.5">
                     <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Nombre</span>
                     <input className={inputCls} value={modelForm.name} onChange={(e) => setModelForm({ ...modelForm, name: e.target.value })} required />
