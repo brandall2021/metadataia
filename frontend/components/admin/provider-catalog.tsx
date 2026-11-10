@@ -3,15 +3,10 @@
 import { useMemo, useState } from "react";
 import { Check, Search } from "lucide-react";
 
-import {
-  PROVIDER_CATEGORIES,
-  providerTypeLabel,
-  type ProviderCategory,
-  type ProviderPreset,
-} from "@/lib/ai-providers";
+import { providerTypeLabel, type ProviderPreset } from "@/lib/ai-providers";
 
-const chipCls =
-  "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors";
+// Proveedores que se muestran por defecto; el resto aparece al buscar.
+const DEFAULT_PRESET_CODES = new Set(["openai", "anthropic", "google", "ollama", "openrouter"]);
 
 export function ProviderCatalog({
   presets,
@@ -25,13 +20,11 @@ export function ProviderCatalog({
   onSelect: (preset: ProviderPreset) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<ProviderCategory | "all">("all");
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
     return presets.filter((preset) => {
-      if (category !== "all" && preset.category !== category) return false;
-      if (!term) return true;
+      if (!term) return DEFAULT_PRESET_CODES.has(preset.code);
       return (
         preset.name.toLowerCase().includes(term) ||
         preset.code.toLowerCase().includes(term) ||
@@ -39,36 +32,18 @@ export function ProviderCatalog({
         providerTypeLabel(preset.type).toLowerCase().includes(term)
       );
     });
-  }, [presets, query, category]);
+  }, [presets, query]);
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <div className="relative w-full lg:max-w-xs">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            className="w-full rounded-xl border border-border bg-muted/30 py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus:border-ring focus:bg-muted/50 focus:ring-2 focus:ring-ring/30"
-            placeholder="Buscar proveedor (OpenAI, Gemini, Groq…)"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {PROVIDER_CATEGORIES.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              onClick={() => setCategory(item.value)}
-              className={`${chipCls} ${
-                category === item.value
-                  ? "border-primary/30 bg-primary/10 text-primary"
-                  : "border-border bg-background text-muted-foreground hover:bg-muted"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+      <div className="relative w-full lg:max-w-xs">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          className="w-full rounded-xl border border-border bg-muted/30 py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus:border-ring focus:bg-muted/50 focus:ring-2 focus:ring-ring/30"
+          placeholder="Buscar entre 25+ proveedores (Gemini, Groq, DeepSeek…)"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -103,11 +78,6 @@ export function ProviderCatalog({
                 )}
               </div>
               <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">{preset.description}</p>
-              <p className="mt-auto pt-2 text-[10px] uppercase tracking-[0.16em] text-muted-foreground/80">
-                {preset.models.length > 0
-                  ? `${preset.models.length} modelos sugeridos`
-                  : "Carga manual de modelos"}
-              </p>
             </button>
           );
         })}
@@ -115,7 +85,7 @@ export function ProviderCatalog({
 
       {filtered.length === 0 && (
         <p className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
-          No hay proveedores que coincidan con “{query}”. Podés crear uno compatible OpenAI desde el formulario.
+          No hay proveedores que coincidan con “{query}”. Podés crear uno compatible OpenAI con “Proveedor personalizado”.
         </p>
       )}
     </div>
