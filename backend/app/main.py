@@ -98,11 +98,30 @@ def create_app() -> FastAPI:
             db.execute(text("SELECT 1"))
         except Exception:
             db_ok = False
+
+        # Chequeo de conectividad con el broker de tareas (Redis/Celery).
+        redis_ok: bool | None = None
+        redis_detail: str | None = None
+        try:
+            from app.jobs.celery_app import celery_app as _celery
+
+            conn = _celery.connection_for_write()
+            try:
+                conn.ensure_connection(max_retries=1, timeout=2)
+                redis_ok = True
+            finally:
+                conn.release()
+        except Exception as exc:  # noqa: BLE001 - diagnostico, no fatal
+            redis_ok = False
+            redis_detail = str(exc)[:200]
+
         return {
             "status": "ok" if db_ok else "degraded",
             "app": settings.app_name,
             "env": settings.app_env,
             "database": "ok" if db_ok else "error",
+            "redis": "ok" if redis_ok else ("error" if redis_ok is False else "unknown"),
+            "redis_detail": redis_detail,
         }
 
     return app
