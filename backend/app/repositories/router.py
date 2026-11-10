@@ -343,8 +343,16 @@ def sync_collections(
 ):
     repo = _get_repo(db, repository_id)
     connector = build_connector(repo)
-    token = connector.authenticate()
-    communities = connector.get_communities(token)
+    try:
+        token = connector.authenticate()
+        communities = connector.get_communities(token)
+    except AppError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"No se pudo conectar al repositorio: {exc}",
+        ) from exc
     seen: set[str] = set()
     for community in communities:
         for col in connector.get_collections(community.get("uuid"), token):

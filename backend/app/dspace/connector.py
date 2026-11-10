@@ -78,7 +78,7 @@ class Dspace9Connector(RepositoryConnector):
         self.username = username
         self.credential = credential
         self.section = section
-        self._client = client or httpx.Client(timeout=30.0)
+        self._client = client or httpx.Client(timeout=30.0, follow_redirects=True)
         self._csrf_token: str | None = None
 
     def _request(self, method: str, path: str, token: str | None = None, **kwargs) -> httpx.Response:
@@ -101,7 +101,10 @@ class Dspace9Connector(RepositoryConnector):
         )
         token = self._csrf_token or r.headers.get("DSPACE-XSRF-TOKEN")
         if not token:
-            raise DSpaceError("DSpace no devolvio un token CSRF")
+            raise DSpaceError(
+                f"DSpace no devolvio un token CSRF (HTTP {r.status_code} en {self.api_url}/security/csrf). "
+                "Verifica que la API URL del repositorio apunte a la raiz de DSpace, por ejemplo https://host/server/api"
+            )
         self._csrf_token = token
         return token
 
