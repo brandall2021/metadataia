@@ -47,6 +47,16 @@ type DocumentType = {
   updated_at: string;
   fields: DocumentTypeField[];
 };
+type RepositoryLite = { id: string; name: string; code: string; active: boolean };
+type FacetValue = { code: string; name: string; count: number | null };
+type ImportResult = { repository_id: string; created: number; skipped: number; created_names: string[] };
+
+const FACET_OPTIONS = [
+  { value: "untTipo", label: "untTipo (taxonomía UNT)" },
+  { value: "itemtype", label: "itemtype (dc.type)" },
+  { value: "typeSubtype", label: "typeSubtype" },
+  { value: "entityType", label: "entityType (entidades)" },
+];
 
 const inputCls =
   "w-full rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus:border-ring focus:bg-muted/50 focus:ring-2 focus:ring-ring/30";
@@ -89,6 +99,14 @@ export default function DocumentTypesPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savingFields, setSavingFields] = useState(false);
+  const [repos, setRepos] = useState<RepositoryLite[]>([]);
+  const [importRepoId, setImportRepoId] = useState("");
+  const [importFacet, setImportFacet] = useState("untTipo");
+  const [facetValues, setFacetValues] = useState<FacetValue[]>([]);
+  const [facetSelection, setFacetSelection] = useState<Record<string, boolean>>({});
+  const [loadingFacet, setLoadingFacet] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
 
   async function load(initialSelectedId?: string | null) {
     try {
@@ -133,9 +151,67 @@ export default function DocumentTypesPage() {
   }
 
   useEffect(() => {
-    void load();
+    void (async () => {
+      await load();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    // Los repositorios son opcionales: si no hay permiso, la importación no aparece.
+    void (async () => {
+      try {
+        const reposData = await apiFetch<RepositoryLite[]>("/api/admin/repositories");
+        setRepos(reposData);
+        setImportRepoId((prev) => prev || reposData[0]?.id || "");
+      } catch {
+        setRepos([]);
+      }
+    })();
+  }, []);
+
+  async function fetchFacetValues() {
+    if (!importRepoId) return;
+    setLoadingFacet(true);
+    setImportMsg(null);
+    try {
+      const values = await apiFetch<FacetValue[]>(
+        `/api/admin/repositories/${importRepoId}/document-types?facet=${encodeURIComponent(importFacet)}`,
+      );
+      setFacetValues(values);
+      setFacetSelection(Object.fromEntries(values.map((v) => [v.code, true])));
+      if (values.length === 0) {
+        setImportMsg("No se encontraron valores en esa faceta.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al consultar el repositorio");
+    } finally {
+      setLoadingFacet(false);
+    }
+  }
+
+  async function importSelectedFacetValues() {
+    const items = facetValues.filter((v) => facetSelection[v.code]);
+    if (items.length === 0) return;
+    setImporting(true);
+    setImportMsg(null);
+    try {
+      const res = await apiFetch<ImportResult>(
+        `/api/admin/repositories/${importRepoId}/document-types/import`,
+        { method: "POST", body: JSON.stringify(items) },
+      );
+      setImportMsg(
+        `Importación completa: ${res.created} tipo(s) creados, ${res.skipped} ya existían.`,
+      );
+      setFacetValues([]);
+      setFacetSelection({});
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al importar tipos");
+    } finally {
+      setImporting(false);
+    }
+  }
 
   function startNew() {
     setSelectedId(null);
@@ -431,6 +507,150 @@ export default function DocumentTypesPage() {
             <div className="rounded-2xl border border-dashed border-border/70 bg-background p-6 text-sm text-muted-foreground">
               No hay tipo seleccionado.
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden rounded-[1.75rem] border-border/70 shadow-sm">
+        <CardHeader className="border-b border-slate-200 bg-slate-50/80">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Layers3 className="size-4" />
+            Importar desde repositorio
+          </CardTitle>
+          <CardDescription>
+            Detectá los tipos de documento publicados en el repositorio y crealos acá.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 p-6">
+          {repos.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+              Sin repositorios configurados. Configurá uno en Administración → Repositorios.
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <label className="flex flex-1 flex-col gap-1.5 text-sm">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                    Repositorio
+                  </span>
+                  <select
+                    className={inputCls}
+                    value={importRepoId}
+                    onChange={(e) => {
+                      setImportRepoId(e.target.value);
+                      setFacetValues([]);
+                      setImportMsg(null);
+                    }}
+                  >
+                    {repos.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-1 flex-col gap-1.5 text-sm">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                    Faceta
+                  </span>
+                  <select
+                    className={inputCls}
+                    value={importFacet}
+                    onChange={(e) => {
+                      setImportFacet(e.target.value);
+                      setFacetValues([]);
+                      setImportMsg(null);
+                    }}
+                  >
+                    {FACET_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Button type="button" variant="outline" disabled={loadingFacet} onClick={() => void fetchFacetValues()}>
+                  {loadingFacet ? "Buscando…" : "Buscar tipos"}
+                </Button>
+              </div>
+
+              {facetValues.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium">
+                      Encontrados en el repositorio: {facetValues.length}
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="text-xs text-primary hover:underline"
+                        onClick={() =>
+                          setFacetSelection(Object.fromEntries(facetValues.map((v) => [v.code, true])))
+                        }
+                      >
+                        Todos
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs text-primary hover:underline"
+                        onClick={() =>
+                          setFacetSelection(Object.fromEntries(facetValues.map((v) => [v.code, false])))
+                        }
+                      >
+                        Ninguno
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    {facetValues.map((v) => {
+                      const alreadyExists = types.some((t) => t.code === v.code);
+                      const checked = Boolean(facetSelection[v.code]) && !alreadyExists;
+                      return (
+                        <label
+                          key={v.code}
+                          className={`flex items-start gap-2 rounded-2xl border px-3 py-2 text-sm shadow-sm transition-colors ${
+                            alreadyExists
+                              ? "border-border/40 bg-muted/30 opacity-60"
+                              : checked
+                                ? "border-primary/40 bg-primary/5"
+                                : "border-border/60 bg-background"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-1"
+                            disabled={alreadyExists}
+                            checked={checked}
+                            onChange={(e) =>
+                              setFacetSelection((prev) => ({ ...prev, [v.code]: e.target.checked }))
+                            }
+                          />
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium text-foreground">{v.name}</span>
+                            <span className="block font-mono text-[11px] text-muted-foreground">
+                              {v.code}
+                              {v.count != null ? ` · ${v.count} items` : ""}
+                              {alreadyExists ? " · ya existe" : ""}
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      className="gap-2"
+                      disabled={importing || facetValues.every((v) => !facetSelection[v.code] || types.some((t) => t.code === v.code))}
+                      onClick={() => void importSelectedFacetValues()}
+                    >
+                      {importing ? "Importando…" : "Importar seleccionados"}
+                    </Button>
+                    {importMsg && <p className="text-xs text-muted-foreground">{importMsg}</p>}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

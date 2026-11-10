@@ -6,7 +6,9 @@ colecciones, y asociacion de tipo documental con coleccion.
 """
 
 import time
+import unicodedata
 import uuid
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -23,6 +25,7 @@ from app.models import DocumentType, Repository, RepositoryCollection, User
 router = APIRouter(tags=["repositories"])
 
 can_manage = require_permission("admin.repositories.manage")
+can_manage_types = require_permission("admin.document_types.manage")
 
 MASKED = "********"
 
@@ -89,6 +92,33 @@ class SyncOut(BaseModel):
     repository_id: uuid.UUID
     communities: int
     collections: int
+
+
+class FacetValueOut(BaseModel):
+    code: str
+    name: str
+    count: int | None = None
+
+
+class FacetValueIn(BaseModel):
+    code: str = Field(min_length=1, max_length=100)
+    name: str = Field(min_length=1, max_length=150)
+
+
+class DocumentTypeImportOut(BaseModel):
+    repository_id: uuid.UUID
+    created: int
+    skipped: int
+    created_names: list[str]
+
+
+def _slugify(value: str) -> str:
+    """Slug ascii para codigos de tipos documentales ('Tesis de grado' -> 'tesis-de-grado')."""
+    text = unicodedata.normalize("NFKD", value)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
+    return text or "tipo"
 
 
 def _repo_out(repo: Repository) -> RepositoryOut:
@@ -425,3 +455,82 @@ def delete_collection(
     )
     db.delete(col)
     db.commit()
+
+
+@router.get("/admin/repositories/{repository_id}/document-types", response_model=list[FacetValueOut])
+def list_repository_document_types(
+    repository_id: uuid.UUID,
+    facet: str = "untTipo",
+    db: Session = Depends(get_db),
+    _: str = Depends(can_manage_types),
+):
+    """Tipos documentales detectados en el repositorio via una faceta de Discovery."""
+    repo = _get_repo(db, repository_id)
+    connector = build_connector(repo)
+    token: str | None = None
+    try:
+        token = connector.authenticate()
+    except Exception:  # noqa: BLE001 - las facetas suelen ser publicas
+        token = None
+    try:
+        values = connector.get_facet_values(facet, size=100, token=token)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"No se pudo consultar el repositorio: {exc}") from exc
+    out: list[FacetValueOut] = []
+    seen: set[str] = set()
+    for value in values:
+        name = str(value.get("label") or "").strip()
+        if not name:
+            continue
+        code = _slugify(name)
+        if code in seen:
+            continue
+        seen.add(code)
+        count = value.get("count")
+        out.append(FacetValueOut(code=code, name=name, count=int(count) if isinstance(count, (int, float)) else None))
+    return out
+
+
+@router.post("/admin/repositories/{repository_id}/document-types/import", response_model=DocumentTypeImportOut)
+def import_repository_document_types(
+    repository_id: uuid.UUID,
+    body: list[FacetValueIn],
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(can_manage_types),
+):
+    """Crea tipos documentales a partir de valores de faceta del repositorio."""
+    _get_repo(db, repository_id)
+    created_names: list[str] = []
+    created = 0
+    skipped = 0
+    for item in body:
+        code = _slugify(item.code)[:100]
+        name = item.name.strip()[:150]
+        if not name:
+            skipped += 1
+            continue
+        existing = db.query(DocumentType).filter(DocumentType.code == code).one_or_none()
+        if existing is not None:
+            skipped += 1
+            continue
+        doc_type = DocumentType(name=name, code=code, active=True)
+        db.add(doc_type)
+        created += 1
+        created_names.append(name)
+    audit_log(
+        db,
+        user=user,
+        action="document_type.import",
+        entity_type="document_type",
+        entity_id=str(repository_id),
+        new_value={"created": created, "skipped": skipped, "names": created_names},
+        **request_context(request),
+    )
+    db.commit()
+    return DocumentTypeImportOut(
+        repository_id=repository_id,
+        created=created,
+        skipped=skipped,
+        created_names=created_names,
+    )

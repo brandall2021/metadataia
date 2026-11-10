@@ -59,7 +59,7 @@ class RepositoryConnector:
     def submit_workspace_item(self, workspace_id, token: str | None = None) -> dict:
         raise NotImplementedError
 
-    def get_item(self, item_uuid: str, token: str | None = None) -> dict:
+    def get_facet_values(self, facet: str, size: int = 100, token: str | None = None) -> list[dict]:
         raise NotImplementedError
 
 
@@ -244,6 +244,18 @@ class Dspace9Connector(RepositoryConnector):
         if r.status_code >= 400:
             raise DSpaceError(f"No se pudo obtener el item (HTTP {r.status_code})")
         return r.json()
+
+    def get_facet_values(self, facet: str, size: int = 100, token: str | None = None) -> list[dict]:
+        """Valores de una faceta de Discovery (p.ej. ``untTipo``, ``itemtype``)."""
+        r = self._request(
+            "GET",
+            f"/discover/facets/{facet}",
+            params={"query": "*", "size": size},
+            token=token,
+        )
+        if r.status_code >= 400:
+            raise DSpaceError(f"No se pudieron obtener los valores de la faceta {facet} (HTTP {r.status_code})")
+        return r.json().get("_embedded", {}).get("values", [])
 
 
 def build_connector(repo: Repository) -> Dspace9Connector:
