@@ -201,7 +201,7 @@ def call_model(
     timeout: float | None = None,
 ) -> dict:
     """Llamada chat completions / messages. Devuelve contenido + tokens + ms."""
-    from app.ai.client import DEFAULT_BASE_URLS, _base as ai_base
+    from app.ai.client import DEFAULT_BASE_URLS, _base as ai_base, omits_temperature
 
     base = ai_base(provider.base_url, provider.type) or DEFAULT_BASE_URLS.get(provider.type, "")
     if not base:
@@ -238,10 +238,11 @@ def call_model(
         token_key = completion_tokens_key(provider.type, model_identifier)
         body = {
             "model": model_identifier,
-            "temperature": temperature,
             token_key: max_tokens,
             "messages": messages,
         }
+        if not omits_temperature(provider.type, model_identifier):
+            body["temperature"] = temperature
         if supports_json:
             body["response_format"] = {"type": "json_object"}
 
@@ -250,6 +251,14 @@ def call_model(
     try:
         try:
             resp = client.post(url, json=body, headers=headers)
+            if (
+                resp.status_code == 400
+                and "temperature" in body
+                and "temperature" in (resp.text or "").lower()
+            ):
+                # El modelo solo acepta la temperature por defecto: reintenta sin ella.
+                body = {key: value for key, value in body.items() if key != "temperature"}
+                resp = client.post(url, json=body, headers=headers)
         except httpx.TimeoutException as exc:
             raise ExtractionError(f"{AI_TIMEOUT}: timeout al llamar al proveedor de IA") from exc
         except httpx.HTTPError as exc:

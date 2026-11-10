@@ -95,6 +95,14 @@ def completion_tokens_key(provider_type: str, model_identifier: str) -> str:
     return "max_tokens"
 
 
+def omits_temperature(provider_type: str, model_identifier: str) -> bool:
+    """Modelos de razonamiento (p. ej. gpt-5, o1, o3) que solo aceptan la
+    temperature por defecto: el parametro debe omitirse, no enviarse."""
+    if provider_type not in ("openai", "azure-openai"):
+        return False
+    return bool(re.match(r"^(gpt-5|o1|o3)", model_identifier, re.IGNORECASE))
+
+
 def _error_result(start: float, message: str, detail: str | None = None) -> dict:
     return {
         "ok": False,
