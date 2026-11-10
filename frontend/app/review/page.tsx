@@ -52,6 +52,15 @@ type DocumentPage = {
   ocr_used: boolean;
 };
 
+type DepositCollection = {
+  id: string;
+  name: string | null;
+  handle: string | null;
+  repository_id: string;
+  repository_name: string | null;
+  document_type_id: string | null;
+};
+
 type Job = {
   id: string;
   job_type: string;
@@ -295,6 +304,7 @@ export default function ReviewPage() {
   const [sortBy, setSortBy] = useState("recent");
   const [currentPage, setCurrentPage] = useState(1);
   const [zoom, setZoom] = useState(100);
+  const [depositPicker, setDepositPicker] = useState<{ collections: DepositCollection[]; value: string } | null>(null);
   const pdfFrameRef = useRef<HTMLIFrameElement | null>(null);
 
   const selectedDoc = review?.detail ?? null;
@@ -565,14 +575,56 @@ export default function ReviewPage() {
     }
   }
 
+  async function requestDeposit(documentId: string, collectionId: string) {
+    await apiFetch(`/api/documents/${documentId}/deposit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ collection_id: collectionId }),
+    });
+  }
+
+  async function confirmDeposit() {
+    if (!selectedId || !depositPicker) return;
+    setSaving("deposit");
+    setError(null);
+    try {
+      await requestDeposit(selectedId, depositPicker.value);
+      setDepositPicker(null);
+      await loadDocuments();
+      await loadDetail(selectedId);
+      pushToast("success", "Depósito encolado");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo completar la revisión");
+      pushToast("error", "No se pudo completar el depósito");
+    } finally {
+      setSaving(null);
+    }
+  }
+
   async function reviewAction(action: "approve" | "reject" | "deposit") {
     if (!selectedId) return;
     if (action !== "approve" && !window.confirm(action === "reject" ? "¿Rechazar este documento?" : "¿Depositar este documento?")) return;
     setSaving(action);
     setError(null);
     try {
-      const path = action === "deposit" ? `/api/documents/${selectedId}/deposit` : `/api/documents/${selectedId}/${action}`;
-      await apiFetch(path, { method: "POST" });
+      if (action === "deposit") {
+        const cols = await apiFetch<DepositCollection[]>(`/api/documents/${selectedId}/deposit/collections`);
+        if (cols.length === 0) {
+          pushToast("error", "No hay colecciones activas para depositar; sincronice el repositorio primero");
+          return;
+        }
+        // Preselecciona la coleccion vinculada al tipo documental del documento.
+        const preferred = cols.find((c) => c.document_type_id && c.document_type_id === selectedDoc?.document_type_id) ?? cols[0];
+        if (cols.length === 1) {
+          await requestDeposit(selectedId, preferred.id);
+        } else {
+          setDepositPicker({ collections: cols, value: preferred.id });
+          return;
+        }
+      } else {
+        const path = action === "approve" ? `/api/documents/${selectedId}/approve` : `/api/documents/${selectedId}/reject`;
+        await apiFetch(path, { method: "POST" });
+      }
       await loadDocuments();
       await loadDetail(selectedId);
       pushToast("success", action === "approve" ? "Documento aprobado" : action === "reject" ? "Documento rechazado" : "Depósito encolado");
@@ -1220,6 +1272,53 @@ export default function ReviewPage() {
             <div className="flex flex-wrap gap-2">
                <Button variant="outline" size="sm" onClick={() => void saveAllChanges()} disabled={saving === "bulk" || !hasPendingChanges} className="gap-2">{saving === "bulk" ? <Loader2 className="size-4 animate-spin" /> : <PenLine className="size-4" />}Guardar revisión</Button>
               <Button variant="outline" size="sm" onClick={() => void reviewAction("approve")} disabled={approveDisabled || saving === "approve"} className="gap-2 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-300">{saving === "approve" ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}Aprobar documento</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {depositPicker && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setDepositPicker(null);
+          }}
+        >
+          <div role="dialog" aria-modal="true" aria-label="Elegir colección destino" className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+              <div>
+                <h2 className="text-base font-semibold tracking-tight text-slate-950">Elegir colección destino</h2>
+                <p className="mt-0.5 text-xs text-slate-500">El documento se publicará en la colección seleccionada.</p>
+              </div>
+              <Button variant="ghost" size="icon-sm" onClick={() => setDepositPicker(null)} aria-label="Cerrar">
+                <X />
+              </Button>
+            </div>
+            <div className="space-y-3 px-5 py-4">
+              <select
+                className={inputCls}
+                value={depositPicker.value}
+                onChange={(e) => setDepositPicker({ ...depositPicker, value: e.target.value })}
+              >
+                {depositPicker.collections.map((col) => (
+                  <option key={col.id} value={col.id}>
+                    {`${col.repository_name ?? "Repositorio"} › ${col.name ?? col.id}`}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-500">
+                {(() => {
+                  const chosen = depositPicker.collections.find((c) => c.id === depositPicker.value);
+                  return chosen?.handle ? `Handle: ${chosen.handle}` : "Colección activa del repositorio.";
+                })()}
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+              <Button variant="outline" size="sm" onClick={() => setDepositPicker(null)}>Cancelar</Button>
+              <Button size="sm" onClick={() => void confirmDeposit()} disabled={saving === "deposit"}>
+                {saving === "deposit" ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                Depositar aquí
+              </Button>
             </div>
           </div>
         </div>

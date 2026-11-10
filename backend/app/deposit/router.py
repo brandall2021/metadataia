@@ -33,6 +33,20 @@ class DepositRequestOut(BaseModel):
     job_id: uuid.UUID | None = None
 
 
+class DepositRequestIn(BaseModel):
+    """Cuerpo opcional: permite elegir la coleccion destino al depositar."""
+    collection_id: uuid.UUID | None = None
+
+
+class DepositCollectionOut(BaseModel):
+    id: uuid.UUID
+    name: str | None = None
+    handle: str | None = None
+    repository_id: uuid.UUID
+    repository_name: str | None = None
+    document_type_id: uuid.UUID | None = None
+
+
 class DepositionOut(BaseModel):
     id: uuid.UUID
     document_id: uuid.UUID
@@ -93,8 +107,16 @@ def _latest_blocking_validation(db: Session, doc: Document) -> ValidationResult 
     return None
 
 
-def _check_depositable(db: Session, doc: Document) -> tuple[RepositoryCollection, Repository]:
-    """Devuelve (collection, repo) si el documento puede depositarse."""
+def _check_depositable(
+    db: Session,
+    doc: Document,
+    collection_id: uuid.UUID | None = None,
+) -> tuple[RepositoryCollection, Repository]:
+    """Devuelve (collection, repo) si el documento puede depositarse.
+
+    Si se indica collection_id (eleccion del usuario al depositar) se usa esa
+    coleccion; si no, se resuelve por asignacion del documento o por el tipo.
+    """
     if doc.status == DocumentStatus.DEPOSITED:
         raise HTTPException(status_code=409, detail="El documento ya fue depositado")
     if doc.status != DocumentStatus.APPROVED:
@@ -106,12 +128,19 @@ def _check_depositable(db: Session, doc: Document) -> tuple[RepositoryCollection
             "Existen errores de validacion bloqueantes en el documento; corrijalos antes de depositar",
             status_code=409,
         )
-    collection = _resolve_collection(db, doc)
-    if collection is None:
-        raise HTTPException(
-            status_code=409,
-            detail="No hay un repositorio configurado para el tipo documental del documento",
-        )
+    if collection_id is not None:
+        collection = db.get(RepositoryCollection, collection_id)
+        if collection is None:
+            raise HTTPException(status_code=409, detail="La coleccion indicada no existe")
+        if not collection.active:
+            raise HTTPException(status_code=409, detail="La coleccion indicada no esta activa")
+    else:
+        collection = _resolve_collection(db, doc)
+        if collection is None:
+            raise HTTPException(
+                status_code=409,
+                detail="No hay un repositorio configurado para el tipo documental del documento",
+            )
     repo = collection.repository
     if repo is None or not repo.active:
         raise HTTPException(status_code=409, detail="El repositorio destino no esta activo")
@@ -154,6 +183,7 @@ def _deposition_out(d: Deposition) -> DepositionOut:
 def request_deposit(
     document_id: str,
     request: Request,
+    body: DepositRequestIn | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(can_deposit),
 ):
@@ -162,15 +192,21 @@ def request_deposit(
     except ValueError:
         raise HTTPException(status_code=422, detail="Documento no valido")
     doc = _get_doc(db, doc_uuid)
-    collection, repo = _check_depositable(db, doc)
-    job = _enqueue_deposit(db, doc)
+    chosen_collection = body.collection_id if body else None
+    collection, repo = _check_depositable(db, doc, chosen_collection)
+    job = _enqueue_deposit(db, doc, chosen_collection)
     audit_log(
         db,
         user=user,
         action="deposit.request",
         entity_type="document",
         entity_id=str(doc.id),
-        new_value={"job_id": str(job.id), "repository_id": str(repo.id), "collection": collection.name},
+        new_value={
+            "job_id": str(job.id),
+            "repository_id": str(repo.id),
+            "collection": collection.name,
+            "collection_id": str(collection.id),
+        },
         **request_context(request),
     )
     db.commit()
@@ -181,6 +217,7 @@ def request_deposit(
 def retry_deposit(
     document_id: str,
     request: Request,
+    body: DepositRequestIn | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(can_deposit),
 ):
@@ -195,8 +232,9 @@ def retry_deposit(
             status_code=409,
             detail="No hay un deposito fallido para reintentar",
         )
-    collection, repo = _check_depositable(db, doc)
-    job = _enqueue_deposit(db, doc)
+    chosen_collection = body.collection_id if body else None
+    collection, repo = _check_depositable(db, doc, chosen_collection)
+    job = _enqueue_deposit(db, doc, chosen_collection)
     audit_log(
         db,
         user=user,
@@ -213,6 +251,38 @@ def retry_deposit(
     )
     db.commit()
     return DepositRequestOut(document_id=doc.id, status="PENDING", job_id=job.id)
+
+
+@router.get("/{document_id}/deposit/collections", response_model=list[DepositCollectionOut])
+def list_deposit_collections(
+    document_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(can_deposit),
+):
+    """Colecciones activas de repositorios activos, para elegir destino al depositar."""
+    try:
+        doc_uuid = uuid.UUID(document_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Documento no valido")
+    _get_doc(db, doc_uuid)
+    cols = (
+        db.query(RepositoryCollection)
+        .join(Repository, RepositoryCollection.repository_id == Repository.id)
+        .filter(RepositoryCollection.active.is_(True), Repository.active.is_(True))
+        .order_by(Repository.name.asc(), RepositoryCollection.name.asc())
+        .all()
+    )
+    return [
+        DepositCollectionOut(
+            id=c.id,
+            name=c.name,
+            handle=c.handle,
+            repository_id=c.repository_id,
+            repository_name=c.repository.name if c.repository else None,
+            document_type_id=c.document_type_id,
+        )
+        for c in cols
+    ]
 
 
 @router.get("/{document_id}/deposition", response_model=DepositionOut)
@@ -277,11 +347,18 @@ def export_snrd(
     )
 
 
-def _enqueue_deposit(db: Session, doc: Document) -> ProcessingJob:
+def _enqueue_deposit(
+    db: Session,
+    doc: Document,
+    collection_id: uuid.UUID | None = None,
+) -> ProcessingJob:
     """Crea el job DEPOSIT y encola la tarea al worker."""
     job = ProcessingJob(document_id=doc.id, job_type="DEPOSIT", status="PENDING")
     db.add(job)
     db.commit()
     db.refresh(job)
-    celery_app.send_task("app.jobs.tasks.deposit_document", args=[str(doc.id)])
+    celery_app.send_task(
+        "app.jobs.tasks.deposit_document",
+        args=[str(doc.id), str(collection_id) if collection_id else None],
+    )
     return job

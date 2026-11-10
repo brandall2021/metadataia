@@ -730,7 +730,7 @@ def deposit_dspace(document_id: str) -> dict:
 
 
 @shared_task(name="app.jobs.tasks.deposit_document")
-def deposit_document(document_id: str) -> dict:
+def deposit_document(document_id: str, collection_id: str | None = None) -> dict:
     """Deposito de un documento aprobado en DSpace (FASE 13).
 
     Flujo: APPOVED -> validacion final -> workspace item -> metadata SNRD-DC
@@ -738,6 +738,9 @@ def deposit_document(document_id: str) -> dict:
     falla el documento vuelve a APPROVED (reintento permitido) y el error
     queda en el job y en la deposicion. Un deposito exitoso no se duplica
     (guard por estado del documento y por Deposition COMPLETED).
+
+    Si se indica collection_id (elegida por el usuario al depositar) tiene
+    prioridad sobre la asignacion del documento o del tipo documental.
     """
     db = SessionLocal()
     job = None
@@ -788,10 +791,21 @@ def deposit_document(document_id: str) -> dict:
             return {"status": "ERROR", "document_id": document_id, "error": "el documento no esta APROBADO"}
 
         collection = None
-        if doc.repository_collection_id is not None:
-            collection = db.get(RepositoryCollection, doc.repository_collection_id)
-        elif doc.document_type is not None:
-            collection = next((c for c in doc.document_type.repository_collections if c.active), None)
+        if collection_id:
+            collection = db.get(RepositoryCollection, UUID(collection_id))
+            if collection is not None and not collection.active:
+                collection = None
+            if collection is None:
+                job.status = "ERROR"
+                job.finished_at = datetime.now(timezone.utc)
+                job.error_message = "la coleccion indicada no existe o no esta activa"
+                db.commit()
+                return {"status": "ERROR", "document_id": document_id, "error": "coleccion invalida"}
+        if collection is None:
+            if doc.repository_collection_id is not None:
+                collection = db.get(RepositoryCollection, doc.repository_collection_id)
+            elif doc.document_type is not None:
+                collection = next((c for c in doc.document_type.repository_collections if c.active), None)
         if collection is None:
             job.status = "ERROR"
             job.finished_at = datetime.now(timezone.utc)
