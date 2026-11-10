@@ -222,6 +222,7 @@ def call_model(
 
     if provider.type == "anthropic":
         url = f"{base}/v1/messages"
+        token_key = "max_tokens"
         body = {
             "model": model_identifier,
             "max_tokens": max_tokens,
@@ -247,41 +248,80 @@ def call_model(
             body["response_format"] = {"type": "json_object"}
 
     t0 = time.monotonic()
-    client = httpx.Client(transport=transport, timeout=timeout or settings.ai_timeout_seconds)
+
+    def _send(payload: dict) -> httpx.Response:
+        # Cada intento abre su propio client para poder reintentar mas adelante.
+        with httpx.Client(
+            transport=transport, timeout=timeout or settings.ai_timeout_seconds
+        ) as attempt_client:
+            return attempt_client.post(url, json=payload, headers=headers)
+
+    def _read_response(data: dict) -> tuple[str, str | None, Any, Any]:
+        """(content, finish_reason, input_tokens, output_tokens)."""
+        if provider.type == "anthropic":
+            content = " ".join(
+                b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"
+            )
+            usage = data.get("usage") or {}
+            return (
+                content,
+                data.get("stop_reason"),
+                usage.get("input_tokens"),
+                usage.get("output_tokens"),
+            )
+        choices = data.get("choices") or []
+        first = choices[0] if choices else {}
+        usage = data.get("usage") or {}
+        return (
+            (first.get("message") or {}).get("content", ""),
+            first.get("finish_reason"),
+            usage.get("prompt_tokens"),
+            usage.get("completion_tokens"),
+        )
+
     try:
-        try:
-            resp = client.post(url, json=body, headers=headers)
-            if (
-                resp.status_code == 400
-                and "temperature" in body
-                and "temperature" in (resp.text or "").lower()
-            ):
-                # El modelo solo acepta la temperature por defecto: reintenta sin ella.
-                body = {key: value for key, value in body.items() if key != "temperature"}
-                resp = client.post(url, json=body, headers=headers)
-        except httpx.TimeoutException as exc:
-            raise ExtractionError(f"{AI_TIMEOUT}: timeout al llamar al proveedor de IA") from exc
-        except httpx.HTTPError as exc:
-            raise ExtractionError(f"{AI_CONNECTION_ERROR}: error de conexion al proveedor de IA") from exc
-    finally:
-        client.close()
+        resp = _send(body)
+        if (
+            resp.status_code == 400
+            and "temperature" in body
+            and "temperature" in (resp.text or "").lower()
+        ):
+            # El modelo solo acepta la temperature por defecto: reintenta sin ella.
+            body = {key: value for key, value in body.items() if key != "temperature"}
+            resp = _send(body)
+    except httpx.TimeoutException as exc:
+        raise ExtractionError(f"{AI_TIMEOUT}: timeout al llamar al proveedor de IA") from exc
+    except httpx.HTTPError as exc:
+        raise ExtractionError(f"{AI_CONNECTION_ERROR}: error de conexion al proveedor de IA") from exc
     if resp.status_code >= 400:
         raise ExtractionError(f"La IA respondio HTTP {resp.status_code}: {resp.text[:300]}")
 
-    data = resp.json()
-    if provider.type == "anthropic":
-        content = " ".join(
-            b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"
+    content, finish_reason, input_tokens, output_tokens = _read_response(resp.json())
+
+    # Los modelos de razonamiento (gpt-5, o1, o3) pueden agotar todo el
+    # presupuesto de tokens de salida en razonamiento interno y devolver
+    # content vacio con finish_reason="length": reintenta con un presupuesto
+    # mayor (x4, tope 32000) para dejarles espacio de responder.
+    if not (content or "").strip() and finish_reason in ("length", "max_tokens"):
+        bigger = min((max_tokens or 2000) * 4, 32000)
+        if bigger > (body.get(token_key) or 0):
+            body[token_key] = bigger
+            try:
+                resp = _send(body)
+            except httpx.TimeoutException as exc:
+                raise ExtractionError(f"{AI_TIMEOUT}: timeout al llamar al proveedor de IA") from exc
+            except httpx.HTTPError as exc:
+                raise ExtractionError(f"{AI_CONNECTION_ERROR}: error de conexion al proveedor de IA") from exc
+            if resp.status_code >= 400:
+                raise ExtractionError(f"La IA respondio HTTP {resp.status_code}: {resp.text[:300]}")
+            content, finish_reason, input_tokens, output_tokens = _read_response(resp.json())
+
+    if not (content or "").strip():
+        raise ExtractionError(
+            "La IA devolvio una respuesta vacia (finish_reason="
+            f"{finish_reason or 'desconocido'}). Si el motivo fue el limite de "
+            "tokens de salida, aumenta el presupuesto del modelo en su configuracion."
         )
-        usage = data.get("usage") or {}
-        input_tokens = usage.get("input_tokens")
-        output_tokens = usage.get("output_tokens")
-    else:
-        choices = data.get("choices") or []
-        content = (choices[0].get("message") or {}).get("content", "") if choices else ""
-        usage = data.get("usage") or {}
-        input_tokens = usage.get("prompt_tokens")
-        output_tokens = usage.get("completion_tokens")
 
     return {
         "content": content,
