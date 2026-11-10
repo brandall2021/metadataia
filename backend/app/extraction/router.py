@@ -42,7 +42,13 @@ def _enqueue_extraction(db: Session, doc: Document) -> ProcessingJob:
     db.add(job)
     db.commit()
     db.refresh(job)
-    celery_app.send_task(_EXTRACTION_TASK, args=[str(doc.id)])
+    try:
+        celery_app.send_task(_EXTRACTION_TASK, args=[str(doc.id)])
+    except Exception as exc:  # noqa: BLE001 - broker de tareas no disponible
+        job.status = "ERROR"
+        job.error_message = f"No se pudo encolar el trabajo (broker de tareas/Redis): {exc}"
+        db.commit()
+        db.refresh(job)
     return job
 
 
@@ -51,7 +57,13 @@ def _enqueue_task(db: Session, doc: Document, job_type: str, task_name: str) -> 
     db.add(job)
     db.commit()
     db.refresh(job)
-    celery_app.send_task(task_name, args=[str(doc.id)])
+    try:
+        celery_app.send_task(task_name, args=[str(doc.id)])
+    except Exception as exc:  # noqa: BLE001 - broker de tareas no disponible
+        job.status = "ERROR"
+        job.error_message = f"No se pudo encolar el trabajo (broker de tareas/Redis): {exc}"
+        db.commit()
+        db.refresh(job)
     return job
 
 

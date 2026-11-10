@@ -146,7 +146,13 @@ def _enqueue_ocr(db: Session, doc: Document) -> ProcessingJob:
     db.add(job)
     db.commit()
     db.refresh(job)
-    celery_app.send_task("app.jobs.tasks.run_ocr", args=[str(doc.id)])
+    try:
+        celery_app.send_task("app.jobs.tasks.run_ocr", args=[str(doc.id)])
+    except Exception as exc:  # noqa: BLE001 - broker de tareas no disponible
+        job.status = "ERROR"
+        job.error_message = f"No se pudo encolar el trabajo (broker de tareas/Redis): {exc}"
+        db.commit()
+        db.refresh(job)
     return job
 
 
