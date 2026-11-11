@@ -170,31 +170,73 @@ class Dspace9Connector(RepositoryConnector):
             raise DSpaceError(f"No se pudo crear el workspace item (HTTP {r.status_code})")
         return r.json()
 
+    def _workspace_sections(self, workspace_id, token: str | None = None) -> list[str]:
+        """Nombres de secciones que define el formulario de depósito del item."""
+        r = self._request("GET", f"/submission/workspaceitems/{workspace_id}", token=token)
+        if r.status_code >= 300:
+            return []
+        sections = (r.json() or {}).get("sections") or {}
+        return [str(s) for s in sections.keys() if s]
+
     def add_metadata(self, workspace_id, metadata: dict, token: str | None = None) -> None:
+        """Agrega metadatos al workspace item.
+
+        DSpace valida el path `/sections/<seccion>/<campo>` contra el
+        formulario de depósito de la colección: si el campo vive en otra
+        sección responde 422. Por eso, ante un 422 se descubren las secciones
+        reales del item y se reintenta con cada una hasta acertar.
+        """
+        section_by_key: dict[str, str] = {}
+        alternate_sections: list[str] | None = None
         for key, values in metadata.items():
-            op = {
-                "op": "add",
-                "path": f"/sections/{self.section}/{key}",
-                "value": [
-                    {
-                        **(dict(value) if isinstance(value, dict) else {"value": value}),
-                        "language": (value.get("language") if isinstance(value, dict) else None),
-                        "authority": (value.get("authority") if isinstance(value, dict) else None),
-                        "confidence": (value.get("confidence") if isinstance(value, dict) else -1),
-                    }
-                    for value in values
-                ],
-            }
+            # DSpace rechaza con 422 los valores vacios o nulos: se omiten antes.
+            clean_values = []
+            for value in values:
+                raw = value.get("value") if isinstance(value, dict) else value
+                if raw is None or not str(raw).strip():
+                    continue
+                clean_values.append(value)
+            if not clean_values:
+                continue
+            op_value = [
+                {
+                    **(dict(value) if isinstance(value, dict) else {"value": value}),
+                    "language": (value.get("language") if isinstance(value, dict) else None),
+                    "authority": (value.get("authority") if isinstance(value, dict) else None),
+                    "confidence": (value.get("confidence") if isinstance(value, dict) else -1),
+                }
+                for value in clean_values
+            ]
+
+            if key in section_by_key:
+                candidates = [section_by_key[key]]
+            else:
+                candidates = [self.section]
+                if alternate_sections is None:
+                    alternate_sections = self._workspace_sections(workspace_id, token)
+                candidates += [s for s in alternate_sections if s and s != self.section]
+
             last = None
-            for attempt in range(3):
-                last = self._request("PATCH", f"/submission/workspaceitems/{workspace_id}", json=[op], token=token)
-                if last.status_code < 300:
-                    break
-                if last.status_code not in {500, 502, 503} or attempt == 2:
-                    raise DSpaceError(
-                        f"No se pudo agregar metadata {key} (HTTP {last.status_code}): {last.text[:200]}"
+            chosen = None
+            for section in candidates:
+                op = {"op": "add", "path": f"/sections/{section}/{key}", "value": op_value}
+                for attempt in range(3):
+                    last = self._request(
+                        "PATCH", f"/submission/workspaceitems/{workspace_id}", json=[op], token=token
                     )
-                time.sleep(0.5)
+                    if last.status_code < 300:
+                        chosen = section
+                        break
+                    if last.status_code not in {500, 502, 503} or attempt == 2:
+                        break
+                    time.sleep(0.5)
+                if chosen is not None:
+                    break
+            if chosen is None:
+                detail = (last.text if last is not None else "")[:800]
+                code = last.status_code if last is not None else "sin respuesta"
+                raise DSpaceError(f"No se pudo agregar metadata {key} (HTTP {code}): {detail}")
+            section_by_key[key] = chosen
 
     def upload_bitstream(self, workspace_id, filename: str, content: bytes, token: str | None = None) -> dict:
         r = self._request(
