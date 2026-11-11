@@ -1054,7 +1054,7 @@ export default function ReviewPage() {
                       <Badge tone={selectedDoc.status === "APPROVED" ? "green" : "amber"}>{selectedDoc.status}</Badge>
                     </div>
                     <p className="mt-2 text-xs text-muted-foreground">Último intento: {review.depositions[0] ? formatDate(review.depositions[0].started_at) : "—"}</p>
-                    <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{review.depositions[0]?.error_message ?? "Sin errores registrados"}</p>
+                    <p className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap break-words">{review.depositions[0]?.error_message ?? "Sin errores registrados"}</p>
                     <Button variant="outline" size="sm" className="mt-3 w-full gap-2" disabled={depositDisabled} onClick={() => void reviewAction("deposit")}>Reintentar depósito</Button>
                   </div>
                 </div>

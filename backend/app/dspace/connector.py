@@ -170,24 +170,28 @@ class Dspace9Connector(RepositoryConnector):
             raise DSpaceError(f"No se pudo crear el workspace item (HTTP {r.status_code})")
         return r.json()
 
-    def _workspace_sections(self, workspace_id, token: str | None = None) -> list[str]:
-        """Nombres de secciones que define el formulario de depósito del item."""
+    def _workspace_form(self, workspace_id, token: str | None = None) -> dict[str, list[str]]:
+        """Formulario de depósito del item: {seccion: [campos visibles]}."""
         r = self._request("GET", f"/submission/workspaceitems/{workspace_id}", token=token)
         if r.status_code >= 300:
-            return []
+            return {}
         sections = (r.json() or {}).get("sections") or {}
-        return [str(s) for s in sections.keys() if s]
+        out: dict[str, list[str]] = {}
+        for name, body in sections.items():
+            keys = [str(k) for k in body.keys() if str(k).startswith("dc.")] if isinstance(body, dict) else []
+            out[str(name)] = keys
+        return out
 
     def add_metadata(self, workspace_id, metadata: dict, token: str | None = None) -> None:
         """Agrega metadatos al workspace item.
 
         DSpace valida el path `/sections/<seccion>/<campo>` contra el
         formulario de depósito de la colección: si el campo vive en otra
-        sección responde 422. Por eso, ante un 422 se descubren las secciones
-        reales del item y se reintenta con cada una hasta acertar.
+        sección responde 422. Por eso se mapea el formulario del item y se
+        prueba el campo primero en la sección que lo contiene (si es visible).
         """
+        form: dict[str, list[str]] | None = None
         section_by_key: dict[str, str] = {}
-        alternate_sections: list[str] | None = None
         for key, values in metadata.items():
             # DSpace rechaza con 422 los valores vacios o nulos: se omiten antes.
             clean_values = []
@@ -208,13 +212,19 @@ class Dspace9Connector(RepositoryConnector):
                 for value in clean_values
             ]
 
+            if form is None:
+                form = self._workspace_form(workspace_id, token)
+
+            candidates: list[str] = []
             if key in section_by_key:
                 candidates = [section_by_key[key]]
             else:
-                candidates = [self.section]
-                if alternate_sections is None:
-                    alternate_sections = self._workspace_sections(workspace_id, token)
-                candidates += [s for s in alternate_sections if s and s != self.section]
+                # Primero las secciones cuyo formulario muestra este campo.
+                hosting = [sec for sec, keys in form.items() if key in keys]
+                candidates = hosting + [self.section]
+                candidates += [sec for sec in form.keys() if sec not in candidates]
+            # Sin duplicados, conservando el orden.
+            candidates = list(dict.fromkeys(candidates))
 
             last = None
             chosen = None
@@ -234,6 +244,19 @@ class Dspace9Connector(RepositoryConnector):
                     break
             if chosen is None:
                 detail = (last.text if last is not None else "")[:800]
+                try:
+                    payload = last.json() if last is not None else {}
+                    msg = payload.get("message") if isinstance(payload, dict) else None
+                    if msg:
+                        detail = f"{msg} | cuerpo: {detail}"
+                except Exception:  # noqa: BLE001 - el cuerpo puede no ser JSON
+                    pass
+                if form:
+                    layout = "; ".join(
+                        f"{sec}: {', '.join(sorted(keys)) or '(sin campos visibles)'}"
+                        for sec, keys in form.items()
+                    )
+                    detail += f" | formulario del item: {layout}"
                 code = last.status_code if last is not None else "sin respuesta"
                 raise DSpaceError(f"No se pudo agregar metadata {key} (HTTP {code}): {detail}")
             section_by_key[key] = chosen
